@@ -4,8 +4,8 @@ from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, Field, ValidationError
 
-from web.middleware.error_handler import add_error_handlers
-from web.models.responses import ErrorResponse
+from interfaces.api.middleware.error_handler import add_error_handlers
+from interfaces.api.responses import ErrorResponse
 
 
 class SampleRequest(BaseModel):

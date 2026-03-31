@@ -1,0 +1,8 @@
+{
+  "id": "test-novel-1",
+  "title": "测试小说",
+  "author": "测试作者",
+  "target_chapters": 10,
+  "stage": "planning",
+  "chapters": []
+}

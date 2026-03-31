@@ -1,0 +1,8 @@
+cli
+clients
+config
+domain
+infrastructure
+pipeline
+story
+web

@@ -1,0 +1,20 @@
+{
+  "id": "bible-1",
+  "novel_id": "test-novel-6",
+  "characters": [
+    {
+      "id": "char-1",
+      "name": "主角",
+      "description": "主角描述",
+      "relationships": []
+    }
+  ],
+  "world_settings": [
+    {
+      "id": "setting-1",
+      "name": "魔法系统",
+      "description": "魔法系统描述",
+      "setting_type": "rule"
+    }
+  ]
+}

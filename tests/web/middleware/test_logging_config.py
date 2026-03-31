@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from web.middleware.logging_config import get_logger, setup_logging
+from interfaces.api.middleware.logging_config import get_logger, setup_logging
 
 
 @pytest.fixture
@@ -263,7 +263,7 @@ class TestSetupLoggingErrorHandling:
             # Use a valid path but we'll mock the FileHandler to fail
             valid_path = os.path.join(temp_dir, "test.log")
 
-            with patch('web.middleware.logging_config.logging.FileHandler') as mock_file_handler:
+            with patch('interfaces.api.middleware.logging_config.logging.FileHandler') as mock_file_handler:
                 # Mock FileHandler to raise an exception
                 mock_file_handler.side_effect = PermissionError("Permission denied")
 
