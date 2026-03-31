@@ -17,6 +17,56 @@ def test_bible_creation():
     assert bible.world_settings == []
 
 
+def test_bible_characters_returns_copy():
+    """测试 characters 属性返回副本"""
+    novel_id = NovelId("novel-1")
+    bible = Bible(id="bible-1", novel_id=novel_id)
+
+    character = Character(
+        id=CharacterId("char-1"),
+        name="张三",
+        description="主角"
+    )
+    bible.add_character(character)
+
+    # 获取列表并尝试修改
+    chars = bible.characters
+    chars.append(Character(
+        id=CharacterId("char-2"),
+        name="李四",
+        description="配角"
+    ))
+
+    # 原始列表不应被修改
+    assert len(bible.characters) == 1
+
+
+def test_bible_world_settings_returns_copy():
+    """测试 world_settings 属性返回副本"""
+    novel_id = NovelId("novel-1")
+    bible = Bible(id="bible-1", novel_id=novel_id)
+
+    setting = WorldSetting(
+        id="setting-1",
+        name="长安城",
+        description="繁华的都城",
+        setting_type="location"
+    )
+    bible.add_world_setting(setting)
+
+    # 获取列表并尝试修改
+    settings = bible.world_settings
+    settings.append(WorldSetting(
+        id="setting-2",
+        name="洛阳城",
+        description="另一座城市",
+        setting_type="location"
+    ))
+
+    # 原始列表不应被修改
+    assert len(bible.world_settings) == 1
+
+
 def test_bible_add_character():
     """测试添加人物"""
     novel_id = NovelId("novel-1")
