@@ -18,7 +18,7 @@ def test_add_single_event():
         chapter_number=1,
         event_type=EventType.CHARACTER_INTRODUCTION,
         description="主角登场",
-        involved_characters=[char_id]
+        involved_characters=(char_id,)
     )
     timeline.add_event(event)
     assert len(timeline.events) == 1
@@ -36,7 +36,7 @@ def test_add_multiple_events_auto_sort():
         chapter_number=3,
         event_type=EventType.CONFLICT,
         description="冲突爆发",
-        involved_characters=[char1, char2]
+        involved_characters=(char1, char2)
     )
     timeline.add_event(event3)
 
@@ -45,7 +45,7 @@ def test_add_multiple_events_auto_sort():
         chapter_number=1,
         event_type=EventType.CHARACTER_INTRODUCTION,
         description="主角登场",
-        involved_characters=[char1]
+        involved_characters=(char1,)
     )
     timeline.add_event(event1)
 
@@ -54,7 +54,7 @@ def test_add_multiple_events_auto_sort():
         chapter_number=2,
         event_type=EventType.RELATIONSHIP_CHANGE,
         description="关系变化",
-        involved_characters=[char1, char2]
+        involved_characters=(char1, char2)
     )
     timeline.add_event(event2)
 
@@ -75,25 +75,25 @@ def test_get_events_before_chapter():
         chapter_number=1,
         event_type=EventType.CHARACTER_INTRODUCTION,
         description="主角登场",
-        involved_characters=[char_id]
+        involved_characters=(char_id,)
     )
     event2 = NovelEvent(
         chapter_number=2,
         event_type=EventType.DECISION,
         description="做出决定",
-        involved_characters=[char_id]
+        involved_characters=(char_id,)
     )
     event3 = NovelEvent(
         chapter_number=3,
         event_type=EventType.CONFLICT,
         description="冲突爆发",
-        involved_characters=[char_id]
+        involved_characters=(char_id,)
     )
     event4 = NovelEvent(
         chapter_number=5,
         event_type=EventType.REVELATION,
         description="真相揭露",
-        involved_characters=[char_id]
+        involved_characters=(char_id,)
     )
 
     timeline.add_event(event1)
@@ -127,25 +127,25 @@ def test_get_events_involving_character():
         chapter_number=1,
         event_type=EventType.CHARACTER_INTRODUCTION,
         description="主角登场",
-        involved_characters=[hero]
+        involved_characters=(hero,)
     )
     event2 = NovelEvent(
         chapter_number=2,
         event_type=EventType.CHARACTER_INTRODUCTION,
         description="反派登场",
-        involved_characters=[villain]
+        involved_characters=(villain,)
     )
     event3 = NovelEvent(
         chapter_number=3,
         event_type=EventType.CONFLICT,
         description="主角与反派冲突",
-        involved_characters=[hero, villain]
+        involved_characters=(hero, villain)
     )
     event4 = NovelEvent(
         chapter_number=4,
         event_type=EventType.RELATIONSHIP_CHANGE,
         description="主角与助手结盟",
-        involved_characters=[hero, sidekick]
+        involved_characters=(hero, sidekick)
     )
 
     timeline.add_event(event1)
@@ -180,7 +180,7 @@ def test_events_property_returns_copy():
         chapter_number=1,
         event_type=EventType.CHARACTER_INTRODUCTION,
         description="主角登场",
-        involved_characters=[char_id]
+        involved_characters=(char_id,)
     )
     timeline.add_event(event)
 
@@ -202,13 +202,13 @@ def test_timeline_with_same_chapter_events():
         chapter_number=1,
         event_type=EventType.CHARACTER_INTRODUCTION,
         description="主角登场",
-        involved_characters=[char_id]
+        involved_characters=(char_id,)
     )
     event2 = NovelEvent(
         chapter_number=1,
         event_type=EventType.DECISION,
         description="做出决定",
-        involved_characters=[char_id]
+        involved_characters=(char_id,)
     )
 
     timeline.add_event(event1)
@@ -216,3 +216,22 @@ def test_timeline_with_same_chapter_events():
 
     assert len(timeline.events) == 2
     assert all(e.chapter_number == 1 for e in timeline.events)
+
+
+def test_add_event_validation():
+    """测试添加事件时的验证"""
+    timeline = EventTimeline()
+
+    with pytest.raises(ValueError, match="Event cannot be None"):
+        timeline.add_event(None)
+
+
+def test_get_events_before_validation():
+    """测试获取事件前的章节号验证"""
+    timeline = EventTimeline()
+
+    with pytest.raises(ValueError, match="Chapter number must be >= 1"):
+        timeline.get_events_before(0)
+
+    with pytest.raises(ValueError, match="Chapter number must be >= 1"):
+        timeline.get_events_before(-1)

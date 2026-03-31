@@ -10,12 +10,12 @@ def test_novel_event_creation():
         chapter_number=1,
         event_type=EventType.CHARACTER_INTRODUCTION,
         description="主角登场",
-        involved_characters=[char_id]
+        involved_characters=(char_id,)
     )
     assert event.chapter_number == 1
     assert event.event_type == EventType.CHARACTER_INTRODUCTION
     assert event.description == "主角登场"
-    assert event.involved_characters == [char_id]
+    assert event.involved_characters == (char_id,)
 
 
 def test_event_type_enum_values():
@@ -34,7 +34,7 @@ def test_novel_event_immutable():
         chapter_number=1,
         event_type=EventType.CHARACTER_INTRODUCTION,
         description="主角登场",
-        involved_characters=[char_id]
+        involved_characters=(char_id,)
     )
     with pytest.raises(AttributeError):
         event.chapter_number = 2
@@ -49,7 +49,7 @@ def test_novel_event_chapter_number_validation():
             chapter_number=0,
             event_type=EventType.CHARACTER_INTRODUCTION,
             description="主角登场",
-            involved_characters=[char_id]
+            involved_characters=(char_id,)
         )
 
     with pytest.raises(ValueError, match="Chapter number must be >= 1"):
@@ -57,7 +57,7 @@ def test_novel_event_chapter_number_validation():
             chapter_number=-1,
             event_type=EventType.CHARACTER_INTRODUCTION,
             description="主角登场",
-            involved_characters=[char_id]
+            involved_characters=(char_id,)
         )
 
 
@@ -70,7 +70,7 @@ def test_novel_event_description_validation():
             chapter_number=1,
             event_type=EventType.CHARACTER_INTRODUCTION,
             description="",
-            involved_characters=[char_id]
+            involved_characters=(char_id,)
         )
 
     with pytest.raises(ValueError, match="Description cannot be empty"):
@@ -78,7 +78,7 @@ def test_novel_event_description_validation():
             chapter_number=1,
             event_type=EventType.CHARACTER_INTRODUCTION,
             description="   ",
-            involved_characters=[char_id]
+            involved_characters=(char_id,)
         )
 
 
@@ -92,7 +92,7 @@ def test_novel_event_with_multiple_characters():
         chapter_number=5,
         event_type=EventType.CONFLICT,
         description="三方对峙",
-        involved_characters=[hero, villain, sidekick]
+        involved_characters=(hero, villain, sidekick)
     )
 
     assert len(event.involved_characters) == 3
@@ -107,10 +107,10 @@ def test_novel_event_with_empty_characters():
         chapter_number=1,
         event_type=EventType.REVELATION,
         description="环境描述",
-        involved_characters=[]
+        involved_characters=()
     )
 
-    assert event.involved_characters == []
+    assert event.involved_characters == ()
 
 
 def test_novel_event_equality():
@@ -121,19 +121,19 @@ def test_novel_event_equality():
         chapter_number=1,
         event_type=EventType.CHARACTER_INTRODUCTION,
         description="主角登场",
-        involved_characters=[char_id]
+        involved_characters=(char_id,)
     )
     event2 = NovelEvent(
         chapter_number=1,
         event_type=EventType.CHARACTER_INTRODUCTION,
         description="主角登场",
-        involved_characters=[char_id]
+        involved_characters=(char_id,)
     )
     event3 = NovelEvent(
         chapter_number=2,
         event_type=EventType.CONFLICT,
         description="冲突爆发",
-        involved_characters=[char_id]
+        involved_characters=(char_id,)
     )
 
     assert event1 == event2
@@ -148,35 +148,35 @@ def test_novel_event_with_different_types():
         chapter_number=1,
         event_type=EventType.CHARACTER_INTRODUCTION,
         description="主角登场",
-        involved_characters=[char_id]
+        involved_characters=(char_id,)
     )
 
     conflict = NovelEvent(
         chapter_number=5,
         event_type=EventType.CONFLICT,
         description="冲突爆发",
-        involved_characters=[char_id]
+        involved_characters=(char_id,)
     )
 
     revelation = NovelEvent(
         chapter_number=10,
         event_type=EventType.REVELATION,
         description="真相揭露",
-        involved_characters=[char_id]
+        involved_characters=(char_id,)
     )
 
     decision = NovelEvent(
         chapter_number=12,
         event_type=EventType.DECISION,
         description="做出选择",
-        involved_characters=[char_id]
+        involved_characters=(char_id,)
     )
 
     relationship = NovelEvent(
         chapter_number=3,
         event_type=EventType.RELATIONSHIP_CHANGE,
         description="关系变化",
-        involved_characters=[char_id]
+        involved_characters=(char_id,)
     )
 
     assert intro.event_type == EventType.CHARACTER_INTRODUCTION
