@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from interfaces.api.v1.generation import router
 from application.workflows.auto_novel_generation_workflow import AutoNovelGenerationWorkflow
+from application.services.hosted_write_service import HostedWriteService
 from application.dtos.generation_result import GenerationResult
 from domain.novel.value_objects.consistency_report import ConsistencyReport
 from domain.novel.services.storyline_manager import StorylineManager
@@ -18,6 +19,28 @@ from domain.novel.value_objects.plot_point import PlotPoint, PlotPointType
 from domain.novel.value_objects.tension_level import TensionLevel
 
 
+async def _mock_generate_chapter_stream(*args, **kwargs):
+    yield {"type": "phase", "phase": "planning"}
+    yield {"type": "chunk", "text": "x"}
+    yield {
+        "type": "done",
+        "content": "Generated chapter content",
+        "consistency_report": {"issues": [], "warnings": [], "suggestions": []},
+        "token_count": 8750,
+    }
+
+
+async def _mock_hosted_stream(*args, **kwargs):
+    yield {
+        "type": "session",
+        "novel_id": "novel-1",
+        "from_chapter": 1,
+        "to_chapter": 1,
+        "total": 1,
+    }
+    yield {"type": "session_done", "novel_id": "novel-1"}
+
+
 @pytest.fixture
 def mock_workflow():
     """Mock AutoNovelGenerationWorkflow"""
@@ -28,6 +51,7 @@ def mock_workflow():
         context_used="Mock context",
         token_count=8750
     ))
+    workflow.generate_chapter_stream = _mock_generate_chapter_stream
     return workflow
 
 
@@ -80,7 +104,14 @@ def mock_plot_arc_repository():
 
 
 @pytest.fixture
-def app(mock_workflow, mock_storyline_manager, mock_plot_arc_repository):
+def mock_hosted_service():
+    svc = Mock(spec=HostedWriteService)
+    svc.stream_hosted_write = _mock_hosted_stream
+    return svc
+
+
+@pytest.fixture
+def app(mock_workflow, mock_storyline_manager, mock_plot_arc_repository, mock_hosted_service):
     """创建测试应用"""
     test_app = FastAPI()
     test_app.include_router(router, prefix="/api/v1")
@@ -88,6 +119,7 @@ def app(mock_workflow, mock_storyline_manager, mock_plot_arc_repository):
     # Override dependencies
     from interfaces.api.v1 import generation
     test_app.dependency_overrides[generation.get_auto_workflow] = lambda: mock_workflow
+    test_app.dependency_overrides[generation.get_hosted_write_service] = lambda: mock_hosted_service
     test_app.dependency_overrides[generation.get_storyline_manager] = lambda: mock_storyline_manager
     test_app.dependency_overrides[generation.get_plot_arc_repository] = lambda: mock_plot_arc_repository
 
@@ -145,6 +177,36 @@ class TestGenerateChapterEndpoint:
         )
 
         assert response.status_code == 422  # Validation error
+
+    def test_generate_chapter_stream_sse(self, client):
+        """流式端点返回 SSE"""
+        response = client.post(
+            "/api/v1/novels/novel-1/generate-chapter-stream",
+            json={
+                "chapter_number": 1,
+                "outline": "Chapter outline",
+            },
+        )
+        assert response.status_code == 200
+        assert "event-stream" in response.headers.get("content-type", "")
+        body = response.text
+        assert "data:" in body
+        assert '"type": "done"' in body or '"done"' in body
+
+    def test_hosted_write_stream_sse(self, client):
+        """托管连写 SSE"""
+        response = client.post(
+            "/api/v1/novels/novel-1/hosted-write-stream",
+            json={
+                "from_chapter": 1,
+                "to_chapter": 1,
+                "auto_save": False,
+                "auto_outline": True,
+            },
+        )
+        assert response.status_code == 200
+        assert "event-stream" in response.headers.get("content-type", "")
+        assert "session" in response.text
 
 
 class TestStorylineEndpoints:

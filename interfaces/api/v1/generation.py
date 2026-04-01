@@ -1,8 +1,12 @@
 """生成工作流 API 端点"""
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from application.workflows.auto_novel_generation_workflow import AutoNovelGenerationWorkflow
+from application.services.hosted_write_service import HostedWriteService
 from domain.novel.services.storyline_manager import StorylineManager
 from domain.novel.repositories.plot_arc_repository import PlotArcRepository
 from domain.novel.value_objects.novel_id import NovelId
@@ -12,8 +16,9 @@ from domain.novel.value_objects.plot_point import PlotPoint, PlotPointType
 from domain.novel.entities.plot_arc import PlotArc
 from interfaces.api.dependencies import (
     get_auto_workflow,
+    get_hosted_write_service,
     get_storyline_manager,
-    get_plot_arc_repository
+    get_plot_arc_repository,
 )
 
 router = APIRouter(prefix="/novels", tags=["generation"])
@@ -91,6 +96,17 @@ class CreatePlotArcRequest(BaseModel):
     key_points: List[PlotPointRequest]
 
 
+class HostedWriteStreamRequest(BaseModel):
+    """托管连写（多章）请求"""
+    from_chapter: int = Field(..., gt=0, description="起始章号")
+    to_chapter: int = Field(..., gt=0, description="结束章号（含）")
+    auto_save: bool = Field(True, description="每章生成后是否写入章节正文")
+    auto_outline: bool = Field(
+        True,
+        description="是否先用模型生成本章要点大纲（否则用简短模板）",
+    )
+
+
 # Endpoints
 @router.post(
     "/{novel_id}/generate-chapter",
@@ -154,6 +170,84 @@ async def generate_chapter(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Generation failed: {str(e)}"
         )
+
+
+@router.post(
+    "/{novel_id}/generate-chapter-stream",
+    status_code=status.HTTP_200_OK,
+)
+async def generate_chapter_stream(
+    novel_id: str,
+    request: GenerateChapterRequest,
+    workflow: AutoNovelGenerationWorkflow = Depends(get_auto_workflow)
+):
+    """流式生成章节（SSE）
+
+    每行一条 ``data: {json}``，事件类型：
+    - ``phase``: ``planning`` | ``context`` | ``llm`` | ``post``
+    - ``chunk``: 正文片段 ``text``
+    - ``done``: 完整 ``content``、``consistency_report``、``token_count``
+    - ``error``: ``message``
+    """
+
+    async def event_gen():
+        async for event in workflow.generate_chapter_stream(
+            novel_id=novel_id,
+            chapter_number=request.chapter_number,
+            outline=request.outline,
+        ):
+            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        event_gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.post(
+    "/{novel_id}/hosted-write-stream",
+    status_code=status.HTTP_200_OK,
+)
+async def hosted_write_stream(
+    novel_id: str,
+    request: HostedWriteStreamRequest,
+    service: HostedWriteService = Depends(get_hosted_write_service),
+):
+    """托管多章连写（SSE）：自动大纲 → 每章流式正文 → 一致性 → 可选落库。
+
+    额外事件：``session``、``chapter_start``、``outline``、``saved``、``session_done``；
+    单章事件均带 ``chapter`` 字段。
+    """
+    if request.to_chapter < request.from_chapter:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="to_chapter must be >= from_chapter",
+        )
+
+    async def event_gen():
+        async for event in service.stream_hosted_write(
+            novel_id=novel_id,
+            from_chapter=request.from_chapter,
+            to_chapter=request.to_chapter,
+            auto_save=request.auto_save,
+            auto_outline=request.auto_outline,
+        ):
+            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        event_gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get(

@@ -2,6 +2,7 @@
 
 提供 FastAPI 依赖注入函数，用于创建服务和仓储实例。
 """
+import logging
 import os
 from pathlib import Path
 from functools import lru_cache
@@ -29,11 +30,14 @@ from application.services.knowledge_service import KnowledgeService
 from application.services.chat_service import ChatService
 from application.services.context_builder import ContextBuilder
 from application.workflows.auto_novel_generation_workflow import AutoNovelGenerationWorkflow
+from application.services.hosted_write_service import HostedWriteService
 from domain.novel.services.consistency_checker import ConsistencyChecker
 from domain.novel.services.storyline_manager import StorylineManager
 from domain.bible.services.relationship_engine import RelationshipEngine
 from domain.ai.services.vector_store import VectorStore
 
+
+logger = logging.getLogger(__name__)
 
 # 全局存储实例
 _storage = None
@@ -41,7 +45,11 @@ _storage = None
 
 def _anthropic_api_key() -> Optional[str]:
     """优先 ANTHROPIC_API_KEY，否则 ANTHROPIC_AUTH_TOKEN（与部分代理/IDE 配置命名一致）。"""
-    return os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN")
+    raw = os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN")
+    if raw is None:
+        return None
+    key = raw.strip()
+    return key or None
 
 
 def _anthropic_base_url() -> Optional[str]:
@@ -165,6 +173,11 @@ def get_chapter_service() -> ChapterService:
     return ChapterService(get_chapter_repository(), get_novel_repository())
 
 
+def get_hosted_write_service() -> HostedWriteService:
+    """托管连写：自动大纲 + 多章流式生成 + 可选落库。"""
+    return HostedWriteService(get_auto_workflow(), get_chapter_service())
+
+
 def get_bible_service() -> BibleService:
     """获取 Bible 服务
 
@@ -220,7 +233,16 @@ def get_chat_service() -> ChatService:
         ChatService 实例
     """
     settings = _anthropic_settings(require_key=False)
-    llm_service = AnthropicProvider(settings) if settings else None
+    llm_service = None
+    if settings:
+        try:
+            llm_service = AnthropicProvider(settings)
+        except Exception as e:
+            logger.warning(
+                "Anthropic 客户端初始化失败，聊天仅可读取历史：%s",
+                e,
+                exc_info=True,
+            )
 
     return ChatService(
         get_chat_repository(),

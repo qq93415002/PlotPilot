@@ -3,7 +3,7 @@
 整合所有子项目组件，实现完整的章节生成流程。
 """
 import logging
-from typing import Tuple
+from typing import Tuple, Dict, Any, AsyncIterator
 from application.services.context_builder import ContextBuilder
 from application.dtos.generation_result import GenerationResult
 from domain.novel.services.consistency_checker import ConsistencyChecker
@@ -17,6 +17,31 @@ from domain.ai.services.llm_service import LLMService, GenerationConfig
 from domain.ai.value_objects.prompt import Prompt
 
 logger = logging.getLogger(__name__)
+
+
+def _consistency_report_to_dict(report: ConsistencyReport) -> Dict[str, Any]:
+    """供 SSE / JSON 序列化。"""
+    return {
+        "issues": [
+            {
+                "type": issue.type.value,
+                "severity": issue.severity.value,
+                "description": issue.description,
+                "location": issue.location,
+            }
+            for issue in report.issues
+        ],
+        "warnings": [
+            {
+                "type": w.type.value,
+                "severity": w.severity.value,
+                "description": w.description,
+                "location": w.location,
+            }
+            for w in report.warnings
+        ],
+        "suggestions": list(report.suggestions),
+    }
 
 
 class AutoNovelGenerationWorkflow:
@@ -117,6 +142,98 @@ class AutoNovelGenerationWorkflow:
             context_used=context,
             token_count=token_count
         )
+
+    async def generate_chapter_stream(
+        self,
+        novel_id: str,
+        chapter_number: int,
+        outline: str
+    ) -> AsyncIterator[Dict[str, Any]]:
+        """流式生成章节：阶段事件 + 正文 token 流 + 最终 done（含一致性报告）。
+
+        事件类型：
+        - phase: planning | context | llm | post
+        - chunk: { text }
+        - done: { content, consistency_report, token_count }
+        - error: { message }
+        """
+        try:
+            if chapter_number < 1:
+                raise ValueError("chapter_number must be positive")
+            if not outline or not outline.strip():
+                raise ValueError("outline cannot be empty")
+
+            yield {"type": "phase", "phase": "planning"}
+            _ = self._get_storyline_context(novel_id, chapter_number)
+            _ = self._get_plot_tension(novel_id, chapter_number)
+
+            yield {"type": "phase", "phase": "context"}
+            context = self.context_builder.build_context(
+                novel_id=novel_id,
+                chapter_number=chapter_number,
+                outline=outline,
+                max_tokens=35000,
+            )
+
+            yield {"type": "phase", "phase": "llm"}
+            prompt = self._build_prompt(context, outline)
+            config = GenerationConfig()
+            parts: list[str] = []
+            async for piece in self.llm_service.stream_generate(prompt, config):
+                parts.append(piece)
+                yield {"type": "chunk", "text": piece}
+
+            content = "".join(parts)
+            if not content.strip():
+                yield {"type": "error", "message": "模型返回空内容"}
+                return
+
+            yield {"type": "phase", "phase": "post"}
+            chapter_state = self._extract_chapter_state(content, chapter_number)
+            consistency_report = self._check_consistency(chapter_state, novel_id)
+            token_count = self.context_builder.estimate_tokens(context)
+
+            yield {
+                "type": "done",
+                "content": content,
+                "consistency_report": _consistency_report_to_dict(consistency_report),
+                "token_count": token_count,
+            }
+        except ValueError as e:
+            yield {"type": "error", "message": str(e)}
+        except Exception as e:
+            logger.exception("generate_chapter_stream failed")
+            yield {"type": "error", "message": str(e)}
+
+    async def suggest_outline(self, novel_id: str, chapter_number: int) -> str:
+        """托管模式：用全书上下文让模型生成本章要点大纲；失败则回退为简短占位。"""
+        seed = f"第{chapter_number}章：承接前情，推进主线与人物节拍；保持人设与叙事节奏一致。"
+        try:
+            context = self.context_builder.build_context(
+                novel_id=novel_id,
+                chapter_number=chapter_number,
+                outline=seed,
+                max_tokens=28000,
+            )
+            cap = min(len(context), 28000)
+            outline_prompt = Prompt(
+                system=(
+                    "你是小说主编。只输出本章的要点大纲（中文），用 1-6 条编号列表，"
+                    "每条一行；不要写正文或对话。"
+                ),
+                user=(
+                    f"以下为背景信息（节选）：\n\n{context[:cap]}\n\n"
+                    f"请写第{chapter_number}章的要点大纲。"
+                ),
+            )
+            cfg = GenerationConfig(max_tokens=1024, temperature=0.7)
+            out = await self.llm_service.generate(outline_prompt, cfg)
+            text = (out.content or "").strip()
+            if text:
+                return text
+        except Exception as e:
+            logger.warning("suggest_outline failed: %s", e)
+        return seed
 
     async def generate_chapter_with_review(
         self,

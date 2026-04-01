@@ -1,13 +1,17 @@
 """Chat API 路由"""
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 from typing import Optional
 
 from application.services.chat_service import ChatService
 from interfaces.api.dependencies import get_chat_service
 from domain.shared.exceptions import EntityNotFoundError
 
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["chat"])
 
@@ -74,6 +78,9 @@ async def get_messages(
     try:
         result = service.get_messages(novel_id)
         return GetMessagesResponse(messages=result["messages"])
+    except ValidationError:
+        logger.exception("聊天消息响应校验失败 novel_id=%s", novel_id)
+        return GetMessagesResponse(messages=[])
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

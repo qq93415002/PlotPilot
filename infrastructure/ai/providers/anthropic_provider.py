@@ -1,6 +1,6 @@
 """Anthropic LLM 提供商实现"""
-from typing import AsyncIterator, Optional
-from anthropic import Anthropic
+from typing import AsyncIterator
+from anthropic import Anthropic, AsyncAnthropic
 from domain.ai.value_objects.prompt import Prompt
 from domain.ai.value_objects.token_usage import TokenUsage
 from domain.ai.services.llm_service import GenerationConfig, GenerationResult
@@ -32,6 +32,7 @@ class AnthropicProvider(BaseProvider):
         if settings.base_url:
             client_kw["base_url"] = settings.base_url
         self.client = Anthropic(**client_kw)
+        self.async_client = AsyncAnthropic(**client_kw)
 
     async def generate(
         self,
@@ -87,16 +88,17 @@ class AnthropicProvider(BaseProvider):
         prompt: Prompt,
         config: GenerationConfig
     ) -> AsyncIterator[str]:
-        """流式生成内容
-
-        Args:
-            prompt: 提示词
-            config: 生成配置
-
-        Yields:
-            生成的文本片段
-
-        Raises:
-            NotImplementedError: 流式生成暂未实现
-        """
-        raise NotImplementedError("Stream generation not yet implemented")
+        """流式生成内容（Anthropic Messages streaming API）。"""
+        try:
+            async with self.async_client.messages.stream(
+                model=config.model,
+                temperature=config.temperature,
+                max_tokens=config.max_tokens,
+                system=prompt.system,
+                messages=[{"role": "user", "content": prompt.user}],
+            ) as stream:
+                async for text in stream.text_stream:
+                    if text:
+                        yield text
+        except Exception as e:
+            raise RuntimeError(f"Failed to stream text: {str(e)}") from e

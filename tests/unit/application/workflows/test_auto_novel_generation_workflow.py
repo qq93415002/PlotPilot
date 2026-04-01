@@ -51,6 +51,10 @@ def mock_plot_arc_repository():
     return repo
 
 
+async def _mock_stream_generate(*args, **kwargs):
+    yield "Generated chapter content"
+
+
 @pytest.fixture
 def mock_llm_service():
     """Mock LLMService"""
@@ -59,6 +63,7 @@ def mock_llm_service():
         content="Generated chapter content",
         token_usage=TokenUsage(input_tokens=500, output_tokens=500)
     ))
+    service.stream_generate = _mock_stream_generate
     return service
 
 
@@ -201,6 +206,38 @@ class TestGenerateChapterWithReview:
         assert content == "Generated chapter content"
         assert len(report.issues) == 1
         assert len(report.suggestions) == 1
+
+
+class TestSuggestOutline:
+    """测试 suggest_outline"""
+
+    @pytest.mark.asyncio
+    async def test_suggest_outline_returns_llm_text(self, workflow, mock_llm_service):
+        mock_llm_service.generate = AsyncMock(
+            return_value=LLMResult(
+                content="1. 开场\n2. 转折",
+                token_usage=TokenUsage(input_tokens=10, output_tokens=20),
+            )
+        )
+        text = await workflow.suggest_outline("novel-1", 3)
+        assert "开场" in text
+        mock_llm_service.generate.assert_called_once()
+
+
+class TestGenerateChapterStream:
+    """测试 generate_chapter_stream 流式事件"""
+
+    @pytest.mark.asyncio
+    async def test_stream_emits_phases_chunk_and_done(self, workflow):
+        events = []
+        async for e in workflow.generate_chapter_stream("novel-1", 1, "Chapter outline"):
+            events.append(e)
+        types = [x["type"] for x in events]
+        assert "phase" in types
+        assert "chunk" in types
+        assert events[-1]["type"] == "done"
+        assert events[-1]["content"] == "Generated chapter content"
+        assert events[-1]["token_count"] == 8750
 
 
 class TestExtractChapterState:

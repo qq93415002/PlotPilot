@@ -65,9 +65,13 @@ class ChatService:
             # 返回空消息列表
             return {"messages": []}
 
-        return {
-            "messages": [msg.to_dict() for msg in thread.messages]
-        }
+        out: List[Dict[str, Any]] = []
+        for msg in thread.messages:
+            try:
+                out.append(msg.to_dict())
+            except Exception as e:
+                logger.warning("跳过无法序列化的聊天消息：%s", e, exc_info=True)
+        return {"messages": out}
 
     async def send_message(
         self,
