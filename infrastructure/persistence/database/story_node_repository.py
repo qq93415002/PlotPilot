@@ -25,22 +25,39 @@ class StoryNodeRepository:
     def _row_to_node(self, row: sqlite3.Row) -> StoryNode:
         """将数据库行转换为 StoryNode"""
         metadata = json.loads(row["metadata"]) if row["metadata"] else {}
-        return StoryNode(
-            id=row["id"],
-            novel_id=row["novel_id"],
-            parent_id=row["parent_id"],
-            node_type=NodeType(row["node_type"]),
-            number=row["number"],
-            title=row["title"],
-            description=row["description"],
-            order_index=row["order_index"],
-            chapter_start=row["chapter_start"],
-            chapter_end=row["chapter_end"],
-            chapter_count=row["chapter_count"] or 0,
-            metadata=metadata,
-            created_at=datetime.fromisoformat(row["created_at"]),
-            updated_at=datetime.fromisoformat(row["updated_at"])
-        )
+
+        # 基础字段
+        node_data = {
+            "id": row["id"],
+            "novel_id": row["novel_id"],
+            "parent_id": row["parent_id"],
+            "node_type": NodeType(row["node_type"]),
+            "number": row["number"],
+            "title": row["title"],
+            "description": row["description"],
+            "order_index": row["order_index"],
+            "metadata": metadata,
+            "created_at": datetime.fromisoformat(row["created_at"]),
+            "updated_at": datetime.fromisoformat(row["updated_at"])
+        }
+
+        # 章节范围字段（part/volume/act）
+        if row["node_type"] != "chapter":
+            node_data.update({
+                "chapter_start": row["chapter_start"],
+                "chapter_end": row["chapter_end"],
+                "chapter_count": row["chapter_count"] or 0
+            })
+
+        # 章节内容字段（chapter）
+        if row["node_type"] == "chapter":
+            node_data.update({
+                "content": row["content"],
+                "word_count": row["word_count"] or 0,
+                "status": row["status"] or "draft"
+            })
+
+        return StoryNode(**node_data)
 
     def get_by_id(self, node_id: str) -> Optional[StoryNode]:
         """根据 ID 获取节点"""
@@ -107,8 +124,9 @@ class StoryNodeRepository:
                 INSERT OR REPLACE INTO story_nodes (
                     id, novel_id, parent_id, node_type, number, title,
                     description, order_index, chapter_start, chapter_end,
-                    chapter_count, metadata, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    chapter_count, content, word_count, status, metadata,
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 node.id,
                 node.novel_id,
@@ -118,9 +136,12 @@ class StoryNodeRepository:
                 node.title,
                 node.description,
                 node.order_index,
-                node.chapter_start,
-                node.chapter_end,
-                node.chapter_count,
+                node.chapter_start if node.node_type != NodeType.CHAPTER else None,
+                node.chapter_end if node.node_type != NodeType.CHAPTER else None,
+                node.chapter_count if node.node_type != NodeType.CHAPTER else 0,
+                node.content if node.node_type == NodeType.CHAPTER else None,
+                node.word_count if node.node_type == NodeType.CHAPTER else 0,
+                node.status if node.node_type == NodeType.CHAPTER else None,
                 json.dumps(node.metadata, ensure_ascii=False),
                 node.created_at.isoformat(),
                 node.updated_at.isoformat()
@@ -143,8 +164,9 @@ class StoryNodeRepository:
                     INSERT OR REPLACE INTO story_nodes (
                         id, novel_id, parent_id, node_type, number, title,
                         description, order_index, chapter_start, chapter_end,
-                        chapter_count, metadata, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        chapter_count, content, word_count, status, metadata,
+                        created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     node.id,
                     node.novel_id,
@@ -154,9 +176,12 @@ class StoryNodeRepository:
                     node.title,
                     node.description,
                     node.order_index,
-                    node.chapter_start,
-                    node.chapter_end,
-                    node.chapter_count,
+                    node.chapter_start if node.node_type != NodeType.CHAPTER else None,
+                    node.chapter_end if node.node_type != NodeType.CHAPTER else None,
+                    node.chapter_count if node.node_type != NodeType.CHAPTER else 0,
+                    node.content if node.node_type == NodeType.CHAPTER else None,
+                    node.word_count if node.node_type == NodeType.CHAPTER else 0,
+                    node.status if node.node_type == NodeType.CHAPTER else None,
                     json.dumps(node.metadata, ensure_ascii=False),
                     node.created_at.isoformat(),
                     node.updated_at.isoformat()

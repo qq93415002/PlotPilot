@@ -19,6 +19,7 @@ class NodeType(str, Enum):
     PART = "part"      # 部
     VOLUME = "volume"  # 卷
     ACT = "act"        # 幕
+    CHAPTER = "chapter"  # 章
 
 
 @dataclass
@@ -32,9 +33,17 @@ class StoryNode:
     order_index: int
     parent_id: Optional[str] = None
     description: Optional[str] = None
+
+    # 章节范围（仅用于 part/volume/act）
     chapter_start: Optional[int] = None
     chapter_end: Optional[int] = None
     chapter_count: int = 0
+
+    # 章节内容（仅用于 chapter 类型）
+    content: Optional[str] = None
+    word_count: int = 0
+    status: str = "draft"  # draft, completed, reviewed
+
     metadata: Dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
@@ -50,11 +59,12 @@ class StoryNode:
 
     @property
     def level(self) -> int:
-        """获取层级（1=部, 2=卷, 3=幕）"""
+        """获取层级（1=部, 2=卷, 3=幕, 4=章）"""
         return {
             NodeType.PART: 1,
             NodeType.VOLUME: 2,
-            NodeType.ACT: 3
+            NodeType.ACT: 3,
+            NodeType.CHAPTER: 4
         }[self.node_type]
 
     @property
@@ -63,7 +73,8 @@ class StoryNode:
         return {
             NodeType.PART: "📚",
             NodeType.VOLUME: "📖",
-            NodeType.ACT: "🎬"
+            NodeType.ACT: "🎬",
+            NodeType.CHAPTER: "📄"
         }[self.node_type]
 
     @property
@@ -72,7 +83,8 @@ class StoryNode:
         type_names = {
             NodeType.PART: "部",
             NodeType.VOLUME: "卷",
-            NodeType.ACT: "幕"
+            NodeType.ACT: "幕",
+            NodeType.CHAPTER: "章"
         }
         return f"第{self.number}{type_names[self.node_type]}：{self.title}"
 
@@ -85,7 +97,7 @@ class StoryNode:
 
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
-        return {
+        result = {
             "id": self.id,
             "novel_id": self.novel_id,
             "parent_id": self.parent_id,
@@ -94,9 +106,6 @@ class StoryNode:
             "title": self.title,
             "description": self.description,
             "order_index": self.order_index,
-            "chapter_start": self.chapter_start,
-            "chapter_end": self.chapter_end,
-            "chapter_count": self.chapter_count,
             "metadata": self.metadata,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
@@ -104,6 +113,24 @@ class StoryNode:
             "icon": self.icon,
             "display_name": self.display_name
         }
+
+        # 章节范围（仅用于 part/volume/act）
+        if self.node_type != NodeType.CHAPTER:
+            result.update({
+                "chapter_start": self.chapter_start,
+                "chapter_end": self.chapter_end,
+                "chapter_count": self.chapter_count
+            })
+
+        # 章节内容（仅用于 chapter）
+        if self.node_type == NodeType.CHAPTER:
+            result.update({
+                "content": self.content,
+                "word_count": self.word_count,
+                "status": self.status
+            })
+
+        return result
 
 
 @dataclass

@@ -2,7 +2,7 @@
  * 故事结构 API
  */
 
-import { apiClient } from './client'
+import { apiClient } from './config'
 
 export type NodeType = 'part' | 'volume' | 'act'
 

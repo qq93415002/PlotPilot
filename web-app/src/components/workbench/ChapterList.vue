@@ -8,41 +8,42 @@
         书目列表
       </n-button>
 
-      <!-- 标签页切换 -->
-      <n-tabs v-model:value="activeTab" type="segment" size="small" style="margin-top: 8px;">
-        <n-tab-pane name="chapters" tab="章节列表">
-          <div class="sidebar-title-row">
-            <n-button
-              v-if="!chapters.length"
-              size="tiny"
-              type="primary"
-              secondary
-              :loading="planning"
-              @click="handlePlanNovel"
-              title="使用 AI 生成初始 Bible 和章节大纲"
-            >
-              ✦ AI 初始规划
-            </n-button>
-            <n-button
-              v-else
-              size="tiny"
-              type="primary"
-              secondary
-              :loading="extending"
-              @click="handleExtendOutline"
-              title="基于当前进度续写后续章节大纲"
-            >
-              ➕ 续写大纲
-            </n-button>
-          </div>
-        </n-tab-pane>
-        <n-tab-pane name="structure" tab="叙事结构" />
-      </n-tabs>
+      <!-- 视图模式切换 -->
+      <div class="view-mode-row">
+        <n-select
+          v-model:value="viewMode"
+          :options="viewModeOptions"
+          size="small"
+          style="flex: 1;"
+        />
+        <n-button
+          v-if="!chapters.length"
+          size="small"
+          type="primary"
+          secondary
+          :loading="planning"
+          @click="handlePlanNovel"
+          title="使用 AI 生成初始 Bible 和章节大纲"
+        >
+          ✦ AI 初始规划
+        </n-button>
+        <n-button
+          v-else
+          size="small"
+          type="primary"
+          secondary
+          :loading="extending"
+          @click="handleExtendOutline"
+          title="基于当前进度续写后续章节大纲"
+        >
+          ➕ 续写大纲
+        </n-button>
+      </div>
     </div>
 
     <n-scrollbar class="sidebar-scroll">
-      <!-- 章节列表 -->
-      <div v-if="activeTab === 'chapters'">
+      <!-- 平铺视图：仅显示章节列表 -->
+      <div v-if="viewMode === 'flat'">
         <div v-if="!chapters.length" class="sidebar-empty">暂无章节大纲，可先执行「结构规划」</div>
         <n-list v-else hoverable clickable>
           <n-list-item
@@ -65,9 +66,13 @@
         </n-list>
       </div>
 
-      <!-- 叙事结构 -->
-      <div v-else-if="activeTab === 'structure'">
-        <StoryStructureTree :slug="slug" />
+      <!-- 树形视图：显示完整叙事结构（部-卷-幕-章） -->
+      <div v-else-if="viewMode === 'tree'">
+        <StoryStructureTree
+          :slug="slug"
+          :current-chapter-id="currentChapterId"
+          @select-chapter="handleChapterClick"
+        />
       </div>
     </n-scrollbar>
   </aside>
@@ -106,7 +111,12 @@ const emit = defineEmits<{
 const message = useMessage()
 const dialog = useDialog()
 
-const activeTab = ref('chapters')
+const viewMode = ref('tree')
+const viewModeOptions = [
+  { label: '🌳 树形视图', value: 'tree' },
+  { label: '📄 平铺视图', value: 'flat' }
+]
+
 const planning = ref(false)
 const extending = ref(false)
 
@@ -190,6 +200,13 @@ const handleExtendOutline = () => {
 .ico-arrow {
   font-size: 14px;
   margin-right: 2px;
+}
+
+.view-mode-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 .sidebar-title-row {
