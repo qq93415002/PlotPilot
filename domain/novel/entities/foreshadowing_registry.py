@@ -8,6 +8,7 @@ from domain.novel.value_objects.foreshadowing import (
     Foreshadowing,
     ForeshadowingStatus
 )
+from domain.novel.entities.subtext_ledger_entry import SubtextLedgerEntry
 from domain.shared.exceptions import InvalidOperationError
 
 
@@ -18,6 +19,7 @@ class ForeshadowingRegistry(BaseEntity):
         super().__init__(id)
         self.novel_id = novel_id
         self._foreshadowings: List[Foreshadowing] = []
+        self._subtext_entries: List[SubtextLedgerEntry] = []
 
     @property
     def foreshadowings(self) -> List[Foreshadowing]:
@@ -71,3 +73,53 @@ class ForeshadowingRegistry(BaseEntity):
             and f.suggested_resolve_chapter is not None
             and f.suggested_resolve_chapter <= current_chapter
         ]
+
+    @property
+    def subtext_entries(self) -> List[SubtextLedgerEntry]:
+        """返回潜台词账本条目列表的副本"""
+        return self._subtext_entries.copy()
+
+    def add_subtext_entry(self, entry: SubtextLedgerEntry) -> None:
+        """添加潜台词账本条目，检查重复"""
+        if any(e.id == entry.id for e in self._subtext_entries):
+            raise InvalidOperationError(
+                f"SubtextLedgerEntry with id '{entry.id}' already exists"
+            )
+        self._subtext_entries.append(entry)
+
+    def update_subtext_entry(self, entry_id: str, updated_entry: SubtextLedgerEntry) -> None:
+        """更新潜台词账本条目"""
+        for i, entry in enumerate(self._subtext_entries):
+            if entry.id == entry_id:
+                self._subtext_entries[i] = updated_entry
+                return
+
+        raise InvalidOperationError(
+            f"SubtextLedgerEntry with id '{entry_id}' not found"
+        )
+
+    def remove_subtext_entry(self, entry_id: str) -> None:
+        """删除潜台词账本条目"""
+        for i, entry in enumerate(self._subtext_entries):
+            if entry.id == entry_id:
+                self._subtext_entries.pop(i)
+                return
+
+        raise InvalidOperationError(
+            f"SubtextLedgerEntry with id '{entry_id}' not found"
+        )
+
+    def get_subtext_entry_by_id(self, entry_id: str) -> Optional[SubtextLedgerEntry]:
+        """通过 ID 获取潜台词账本条目"""
+        for entry in self._subtext_entries:
+            if entry.id == entry_id:
+                return entry
+        return None
+
+    def get_pending_subtext_entries(self) -> List[SubtextLedgerEntry]:
+        """获取所有待消费的潜台词账本条目"""
+        return [
+            e for e in self._subtext_entries
+            if e.status == "pending"
+        ]
+

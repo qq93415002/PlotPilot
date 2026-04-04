@@ -1,6 +1,8 @@
 """ForeshadowingRegistry 数据映射器"""
 from typing import Dict, Any, List
+from datetime import datetime
 from domain.novel.entities.foreshadowing_registry import ForeshadowingRegistry
+from domain.novel.entities.subtext_ledger_entry import SubtextLedgerEntry
 from domain.novel.value_objects.novel_id import NovelId
 from domain.novel.value_objects.foreshadowing import (
     Foreshadowing,
@@ -36,6 +38,19 @@ class ForeshadowingMapper:
                     "resolved_in_chapter": f.resolved_in_chapter
                 }
                 for f in registry.foreshadowings
+            ],
+            "subtext_entries": [
+                {
+                    "id": e.id,
+                    "chapter": e.chapter,
+                    "character_id": e.character_id,
+                    "hidden_clue": e.hidden_clue,
+                    "sensory_anchors": e.sensory_anchors,
+                    "status": e.status,
+                    "consumed_at_chapter": e.consumed_at_chapter,
+                    "created_at": e.created_at.isoformat()
+                }
+                for e in registry.subtext_entries
             ]
         }
 
@@ -52,7 +67,7 @@ class ForeshadowingMapper:
         Raises:
             ValueError: 如果数据格式不正确或缺少必需字段
         """
-        # 验证必需字段
+        # 验证必需字段（subtext_entries 是可选的，向后兼容）
         required_fields = ["id", "novel_id", "foreshadowings"]
         missing_fields = [field for field in required_fields if field not in data]
         if missing_fields:
@@ -77,6 +92,21 @@ class ForeshadowingMapper:
                     resolved_in_chapter=f_data.get("resolved_in_chapter")
                 )
                 registry.register(foreshadowing)
+
+            # 添加潜台词账本条目（向后兼容：如果不存在则跳过）
+            if "subtext_entries" in data:
+                for e_data in data["subtext_entries"]:
+                    entry = SubtextLedgerEntry(
+                        id=e_data["id"],
+                        chapter=e_data["chapter"],
+                        character_id=e_data["character_id"],
+                        hidden_clue=e_data["hidden_clue"],
+                        sensory_anchors=e_data["sensory_anchors"],
+                        status=e_data["status"],
+                        consumed_at_chapter=e_data.get("consumed_at_chapter"),
+                        created_at=datetime.fromisoformat(e_data["created_at"])
+                    )
+                    registry.add_subtext_entry(entry)
 
             return registry
         except (ValueError, KeyError) as e:
