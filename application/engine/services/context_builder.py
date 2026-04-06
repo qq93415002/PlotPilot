@@ -12,6 +12,7 @@ from domain.ai.services.vector_store import VectorStore
 from domain.ai.services.embedding_service import EmbeddingService
 from domain.novel.repositories.foreshadowing_repository import ForeshadowingRepository
 from application.ai.vector_retrieval_facade import VectorRetrievalFacade
+from application.engine.services.context_budget_allocator import ContextBudgetAllocator, BudgetAllocation
 
 if TYPE_CHECKING:
     from application.engine.dtos.scene_director_dto import SceneDirectorAnalysis
@@ -86,6 +87,9 @@ class ContextBuilder:
         plot_arc_repository: Optional[PlotArcRepository] = None,
         embedding_service: Optional[EmbeddingService] = None,
         foreshadowing_repository: Optional[ForeshadowingRepository] = None,
+        story_node_repository = None,
+        bible_repository = None,
+        use_budget_allocator: bool = True,
     ):
         self.bible_service = bible_service
         self.storyline_manager = storyline_manager
@@ -96,11 +100,26 @@ class ContextBuilder:
         self.plot_arc_repository = plot_arc_repository
         self.embedding_service = embedding_service
         self.foreshadowing_repository = foreshadowing_repository
+        self.story_node_repository = story_node_repository
+        self.bible_repository = bible_repository
+        self.use_budget_allocator = use_budget_allocator
 
         # 创建向量检索门面（如果两个服务都可用）
         self.vector_facade = None
         if vector_store and embedding_service:
             self.vector_facade = VectorRetrievalFacade(vector_store, embedding_service)
+        
+        # 创建预算分配器（用于轨道二双轨融合）
+        self.budget_allocator = None
+        if use_budget_allocator:
+            self.budget_allocator = ContextBudgetAllocator(
+                foreshadowing_repository=foreshadowing_repository,
+                chapter_repository=chapter_repository,
+                bible_repository=bible_repository,
+                story_node_repository=story_node_repository,
+                vector_store=vector_store,
+                embedding_service=embedding_service,
+            )
 
     def build_voice_anchor_system_section(self, novel_id: str) -> str:
         """Bible 角色声线/小动作锚点，用于章节或节拍 System 提示。"""
@@ -219,6 +238,72 @@ class ContextBuilder:
                 "layer2": layer2_tokens,
                 "layer3": layer3_tokens,
                 "total": total_tokens,
+            },
+        }
+    
+    def build_context_with_allocator(
+        self,
+        novel_id: str,
+        chapter_number: int,
+        outline: str,
+        max_tokens: int = 35000,
+        scene_director: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """使用预算分配器构建上下文（双轨融合版）
+        
+        这是万章级超长篇的核心方法，采用"洋葱模型"优先级挤压：
+        - T0: 强制内容（伏笔、角色锚点、当前幕摘要）—— 绝不删减
+        - T1: 可压缩内容（图谱子网、近期幕摘要）—— 按比例压缩
+        - T2: 动态内容（最近章节）—— 动态水位线
+        - T3: 可牺牲内容（向量召回）—— 预算不足时归零
+        
+        Args:
+            novel_id: 小说 ID
+            chapter_number: 章节号
+            outline: 章节大纲
+            max_tokens: 最大 token 数
+            scene_director: 场记分析结果（可选）
+        
+        Returns:
+            {
+                "context": "组装好的上下文字符串",
+                "allocation": BudgetAllocation 对象,
+                "token_usage": {...},
+            }
+        """
+        if not self.budget_allocator:
+            # 降级到原有方法
+            logger.warning("预算分配器未初始化，降级到 build_context")
+            return {
+                "context": self.build_context(novel_id, chapter_number, outline, max_tokens),
+                "allocation": None,
+                "token_usage": {"method": "legacy"},
+            }
+        
+        # 使用预算分配器
+        allocation = self.budget_allocator.allocate(
+            novel_id=novel_id,
+            chapter_number=chapter_number,
+            outline=outline,
+            total_budget=max_tokens,
+            scene_director=scene_director,
+        )
+        
+        # 获取组装好的上下文
+        context = allocation.get_final_context()
+        
+        return {
+            "context": context,
+            "allocation": allocation,
+            "token_usage": {
+                "total": allocation.used_tokens,
+                "remaining": allocation.remaining_tokens,
+                "t0_reserved": allocation.t0_reserved,
+                "t1_allocated": allocation.t1_allocated,
+                "t2_allocated": allocation.t2_allocated,
+                "t3_allocated": allocation.t3_allocated,
+                "compression_applied": allocation.compression_applied,
+                "compression_log": allocation.compression_log,
             },
         }
 
