@@ -5,6 +5,7 @@
 from pathlib import Path
 import sys
 import time
+import logging
 from datetime import datetime
 
 # 必须在其他 aitext 模块导入前执行：将仓库根目录 `.env` 写入 os.environ
@@ -18,6 +19,16 @@ try:
 except Exception:
     # 无 .env 或非标准启动方式时忽略
     pass
+
+# 配置日志（必须在导入其他模块前）
+from interfaces.api.middleware.logging_config import setup_logging
+import os
+
+log_level = getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO)
+log_file = os.getenv("LOG_FILE", "logs/aitext.log")
+setup_logging(level=log_level, log_file=log_file)
+
+logger = logging.getLogger(__name__)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -52,10 +63,14 @@ from application.paths import DATA_DIR
 BACKEND_VERSION = datetime.now().strftime("%Y%m%d-%H%M%S")
 STARTUP_TIME = time.time()
 
-print("=" * 80)
-print(f"🚀 BACKEND STARTING - Version: {BACKEND_VERSION}")
-print(f"   Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-print("=" * 80)
+logger.info("=" * 80)
+logger.info(f"🚀 BACKEND STARTING - Version: {BACKEND_VERSION}")
+logger.info(f"   Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+logger.info(f"   Log Level: {logging.getLevelName(log_level)}")
+logger.info(f"   Log File: {log_file}")
+logger.info(f"   Python: {sys.version.split()[0]}")
+logger.info(f"   Working Dir: {Path.cwd()}")
+logger.info("=" * 80)
 
 # 创建 FastAPI 应用
 app = FastAPI(
@@ -63,6 +78,22 @@ app = FastAPI(
     version="2.0.0",
     description="AI 小说创作平台 API"
 )
+
+@app.on_event("startup")
+async def startup_event():
+    """应用启动事件"""
+    logger.info("📦 Loading modules and routes...")
+    logger.info("✅ FastAPI application started successfully")
+    logger.info(f"📊 Registered {len(app.routes)} routes")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """应用关闭事件"""
+    uptime = time.time() - STARTUP_TIME
+    logger.info("=" * 80)
+    logger.info(f"🛑 BACKEND SHUTTING DOWN")
+    logger.info(f"   Total uptime: {uptime:.2f} seconds ({uptime/3600:.2f} hours)")
+    logger.info("=" * 80)
 
 # 配置 CORS
 app.add_middleware(
