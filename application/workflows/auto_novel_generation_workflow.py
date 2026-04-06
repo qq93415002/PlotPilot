@@ -135,12 +135,18 @@ class AutoNovelGenerationWorkflow:
         )
         context_tokens = payload["token_usage"]["total"]
         style_summary = self._get_style_summary(novel_id)
+        voice_anchors = ""
+        try:
+            voice_anchors = self.context_builder.build_voice_anchor_system_section(novel_id)
+        except Exception as e:
+            logger.warning("voice_anchor section skipped: %s", e)
         return {
             "storyline_context": storyline_context,
             "plot_tension": plot_tension,
             "context": context,
             "context_tokens": context_tokens,
             "style_summary": style_summary,
+            "voice_anchors": voice_anchors,
         }
 
     async def post_process_generated_chapter(
@@ -216,6 +222,7 @@ class AutoNovelGenerationWorkflow:
             storyline_context=bundle["storyline_context"],
             plot_tension=bundle["plot_tension"],
             style_summary=bundle["style_summary"],
+            voice_anchors=bundle.get("voice_anchors") or "",
         )
         config = GenerationConfig()
         logger.info(f"  → 发送请求到 LLM (max_tokens={config.max_tokens}, temperature={config.temperature})")
@@ -293,6 +300,7 @@ class AutoNovelGenerationWorkflow:
                 storyline_context=bundle["storyline_context"],
                 plot_tension=bundle["plot_tension"],
                 style_summary=bundle["style_summary"],
+                voice_anchors=bundle.get("voice_anchors") or "",
             )
             config = GenerationConfig()
             logger.info(f"  → 发送流式请求到 LLM")
@@ -474,6 +482,7 @@ class AutoNovelGenerationWorkflow:
         beat_index: Optional[int] = None,
         total_beats: Optional[int] = None,
         beat_target_words: Optional[int] = None,
+        voice_anchors: str = "",
     ) -> Prompt:
         """构建与 HTTP 单章 / 流式 / 托管按节拍写作一致的 Prompt（对外 API）。"""
         return self._build_prompt(
@@ -486,6 +495,7 @@ class AutoNovelGenerationWorkflow:
             beat_index=beat_index,
             total_beats=total_beats,
             beat_target_words=beat_target_words,
+            voice_anchors=voice_anchors,
         )
 
     def _build_prompt(
@@ -500,6 +510,7 @@ class AutoNovelGenerationWorkflow:
         beat_index: Optional[int] = None,
         total_beats: Optional[int] = None,
         beat_target_words: Optional[int] = None,
+        voice_anchors: str = "",
     ) -> Prompt:
         """构建 LLM 提示词
 
@@ -512,6 +523,7 @@ class AutoNovelGenerationWorkflow:
             beat_prompt: 非空时进入「分节拍」模式（托管断点续写）
             beat_index / total_beats: 节拍序号（0-based / 总数）
             beat_target_words: 本段目标字数（分节拍时覆盖「整章 2000-3000 字」说明）
+            voice_anchors: Bible 角色声线/小动作锚点（高优先级 System 提示）
 
         Returns:
             Prompt 对象
@@ -519,6 +531,7 @@ class AutoNovelGenerationWorkflow:
         sc = (storyline_context or "").strip()
         pt = (plot_tension or "").strip()
         ss = (style_summary or "").strip()
+        va = (voice_anchors or "").strip()
         planning_parts: list[str] = []
         if sc and sc not in ("Storyline context unavailable",):
             planning_parts.append(f"【故事线 / 里程碑】\n{sc}")
@@ -531,6 +544,13 @@ class AutoNovelGenerationWorkflow:
             planning_section = (
                 "\n".join(planning_parts)
                 + "\n\n以上约束须与本章大纲及后文 Bible/摘要一致；不得与之矛盾。\n"
+            )
+
+        voice_block = ""
+        if va:
+            voice_block = (
+                "\n【角色声线与肢体语言（Bible 锚点，必须遵守）】\n"
+                f"{va}\n\n"
             )
 
         beat_mode = bool((beat_prompt or "").strip())
@@ -548,7 +568,7 @@ class AutoNovelGenerationWorkflow:
 
         system_message = f"""你是一位专业的网络小说作家。根据以下上下文撰写章节内容。
 
-{planning_section}{context}
+{planning_section}{voice_block}{context}
 
 写作要求：
 1. 必须有多个人物互动（至少2-3个角色出场）

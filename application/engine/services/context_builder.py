@@ -102,6 +102,10 @@ class ContextBuilder:
         if vector_store and embedding_service:
             self.vector_facade = VectorRetrievalFacade(vector_store, embedding_service)
 
+    def build_voice_anchor_system_section(self, novel_id: str) -> str:
+        """Bible 角色声线/小动作锚点，用于章节或节拍 System 提示。"""
+        return self.bible_service.build_character_voice_anchor_section(novel_id)
+
     def build_context(
         self,
         novel_id: str,

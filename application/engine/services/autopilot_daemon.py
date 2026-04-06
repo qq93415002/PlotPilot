@@ -490,6 +490,17 @@ class AutopilotDaemon:
             logger.info(f"[{novel.novel_id}] 用户已停止（上下文组装后）")
             return
 
+        voice_anchors = ""
+        if bundle is not None:
+            voice_anchors = bundle.get("voice_anchors") or ""
+        elif self.context_builder:
+            try:
+                voice_anchors = self.context_builder.build_voice_anchor_system_section(
+                    novel.novel_id.value
+                )
+            except Exception:
+                voice_anchors = ""
+
         # 5. 节拍放大
         beats = []
         if self.context_builder:
@@ -527,12 +538,15 @@ class AutopilotDaemon:
                         beat_index=i,
                         total_beats=len(beats),
                         beat_target_words=int(beat.target_words),
+                        voice_anchors=voice_anchors,
                     )
                     max_tokens = int(beat.target_words * 1.5)
                     cfg = GenerationConfig(max_tokens=max_tokens, temperature=0.85)
                     beat_content = await self._stream_llm_with_stop_watch(prompt, cfg, novel=novel)
                 else:
-                    beat_content = await self._stream_one_beat(outline, context, beat_prompt, beat, novel=novel)
+                    beat_content = await self._stream_one_beat(
+                        outline, context, beat_prompt, beat, novel=novel, voice_anchors=voice_anchors
+                    )
 
                 if beat_content.strip():
                     chapter_content += ("\n\n" if chapter_content else "") + beat_content
@@ -563,11 +577,14 @@ class AutopilotDaemon:
                     storyline_context=bundle["storyline_context"],
                     plot_tension=bundle["plot_tension"],
                     style_summary=bundle["style_summary"],
+                    voice_anchors=voice_anchors,
                 )
                 cfg = GenerationConfig(max_tokens=3000, temperature=0.85)
                 beat_content = await self._stream_llm_with_stop_watch(prompt, cfg, novel=novel)
             else:
-                beat_content = await self._stream_one_beat(outline, context, None, None, novel=novel)
+                beat_content = await self._stream_one_beat(
+                    outline, context, None, None, novel=novel, voice_anchors=voice_anchors
+                )
             if not self._is_still_running(novel):
                 logger.info(f"[{novel.novel_id}] 用户已停止，单段生成已中断")
                 novel.current_beat_index = 0
@@ -776,10 +793,19 @@ class AutopilotDaemon:
 
         return content
 
-    async def _stream_one_beat(self, outline, context, beat_prompt, beat, novel=None) -> str:
+    async def _stream_one_beat(
+        self, outline, context, beat_prompt, beat, novel=None, voice_anchors: str = ""
+    ) -> str:
         """无 AutoNovelGenerationWorkflow 时的降级：爽文短 Prompt + 流式。"""
-        system = """你是一位资深网文作家，擅长写爽文。
-写作要求：
+        va = (voice_anchors or "").strip()
+        voice_block = ""
+        if va:
+            voice_block = (
+                "【角色声线与肢体语言（Bible 锚点，必须遵守）】\n"
+                f"{va}\n\n"
+            )
+        system = f"""你是一位资深网文作家，擅长写爽文。
+{voice_block}写作要求：
 1. 严格按节拍字数和聚焦点写作
 2. 必须有对话和人物互动，保持人物性格一致
 3. 增加感官细节：视觉、听觉、触觉、情绪
