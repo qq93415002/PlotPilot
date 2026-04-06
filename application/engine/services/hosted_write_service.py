@@ -9,9 +9,6 @@ from application.core.services.chapter_service import ChapterService
 from application.core.services.novel_service import NovelService
 from application.workflows.auto_novel_generation_workflow import AutoNovelGenerationWorkflow
 from domain.shared.exceptions import EntityNotFoundError
-from domain.novel.value_objects.chapter_id import ChapterId
-from domain.novel.value_objects.novel_id import NovelId
-
 if TYPE_CHECKING:
     from application.engine.services.chapter_aftermath_pipeline import ChapterAftermathPipeline
 
@@ -34,7 +31,7 @@ class HostedWriteService:
         self._aftermath = chapter_aftermath_pipeline
 
     def _schedule_chapter_aftermath(self, novel_id: str, chapter_number: int, content: str) -> None:
-        """与 HTTP 保存同源：叙事/向量、文风、KG、后台抽取（不阻塞 SSE）。"""
+        """与 HTTP 保存同源：叙事/向量、文风、KG（不阻塞 SSE）；三元组与伏笔在叙事同步单次 LLM 中落库。"""
         if not self._aftermath or not content.strip():
             return
 
@@ -43,13 +40,7 @@ class HostedWriteService:
                 dto = self._chapter.get_chapter_by_novel_and_number(novel_id, chapter_number)
                 if not dto:
                     return
-                await self._aftermath.run_after_chapter_saved(
-                    novel_id,
-                    chapter_number,
-                    content,
-                    novel_id_vo=NovelId(novel_id),
-                    chapter_id_vo=ChapterId(dto.id),
-                )
+                await self._aftermath.run_after_chapter_saved(novel_id, chapter_number, content)
             except Exception as e:
                 logger.warning(
                     "托管章后管线失败 novel=%s ch=%s: %s", novel_id, chapter_number, e

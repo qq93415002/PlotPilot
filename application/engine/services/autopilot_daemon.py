@@ -620,7 +620,7 @@ class AutopilotDaemon:
         content = chapter.content or ""
         chapter_id = ChapterId(chapter.id)
 
-        # 1. 统一章后管线：叙事/向量、文风（一次）、KG 推断、GRAPH+伏笔（不重复入队 VOICE）
+        # 1. 统一章后管线：叙事/向量、文风（一次）、KG 推断；三元组与伏笔在叙事同步单次 LLM 中落库
         drift_result: Dict[str, Any] = {"drift_alert": False, "similarity_score": None}
         if self.aftermath_pipeline:
             try:
@@ -628,8 +628,6 @@ class AutopilotDaemon:
                     novel.novel_id.value,
                     chapter_num,
                     content,
-                    novel_id_vo=novel.novel_id,
-                    chapter_id_vo=chapter_id,
                 )
                 logger.info(
                     f"[{novel.novel_id}] 章后管线完成: 相似度={drift_result.get('similarity_score')}, "
@@ -684,8 +682,8 @@ class AutopilotDaemon:
         content: str,
         chapter_id: ChapterId,
     ) -> Dict[str, Any]:
-        """无统一管线时：三任务入队 + 同步文风（可能与队列内 VOICE 重复）。"""
-        for task_type in [TaskType.VOICE_ANALYSIS, TaskType.GRAPH_UPDATE, TaskType.FORESHADOW_EXTRACT]:
+        """无统一管线时：VOICE + extract_bundle（单次 LLM 叙事/三元组/伏笔）入队 + 同步文风（可能与队列内 VOICE 重复）。"""
+        for task_type in [TaskType.VOICE_ANALYSIS, TaskType.EXTRACT_BUNDLE]:
             self.background_task_service.submit_task(
                 task_type=task_type,
                 novel_id=novel.novel_id,
