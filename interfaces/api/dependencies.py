@@ -209,7 +209,14 @@ def get_chapter_service() -> ChapterService:
     Returns:
         ChapterService 实例
     """
-    return ChapterService(get_chapter_repository(), get_novel_repository())
+    from infrastructure.persistence.database.sqlite_chapter_review_repository import SqliteChapterReviewRepository
+    
+    review_repo = SqliteChapterReviewRepository(get_database())
+    return ChapterService(
+        get_chapter_repository(), 
+        get_novel_repository(),
+        review_repo
+    )
 
 
 @lru_cache
@@ -301,7 +308,12 @@ def get_bible_service() -> BibleService:
     from infrastructure.persistence.database.triple_repository import TripleRepository
 
     sync = BibleLocationTripleSyncService(TripleRepository())
-    return BibleService(get_bible_repository(), location_triple_sync=sync)
+    return BibleService(
+        get_bible_repository(),
+        novel_repository=get_novel_repository(),
+        chapter_repository=get_chapter_repository(),
+        location_triple_sync=sync,
+    )
 
 
 def get_cast_service() -> CastService:

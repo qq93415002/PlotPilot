@@ -19,16 +19,19 @@ class ChapterService:
     def __init__(
         self,
         chapter_repository: ChapterRepository,
-        novel_repository: NovelRepository
+        novel_repository: NovelRepository,
+        chapter_review_repository=None
     ):
         """初始化服务
 
         Args:
             chapter_repository: Chapter 仓储
             novel_repository: Novel 仓储
+            chapter_review_repository: Chapter Review 仓储（可选）
         """
         self.chapter_repository = chapter_repository
         self.novel_repository = novel_repository
+        self.chapter_review_repository = chapter_review_repository
 
     def update_chapter_content(
         self,
@@ -159,23 +162,20 @@ class ChapterService:
         if chapter is None:
             raise EntityNotFoundError("Chapter", f"{novel_id}/chapter-{chapter_number}")
 
-        # 尝试读取审阅文件
-        review_path = f"novels/{novel_id}/chapters/chapter-{chapter_number}-review.json"
-        from infrastructure.persistence.storage.file_storage import FileStorage
-        storage = self.chapter_repository.storage
+        # 使用数据库 repository
+        if self.chapter_review_repository:
+            review = self.chapter_review_repository.get(novel_id, chapter_number)
+            if review:
+                return review
 
-        if storage.exists(review_path):
-            data = storage.read_json(review_path)
-            return ChapterReviewDTO.from_dict(data)
-        else:
-            # 返回默认审阅
-            now = datetime.utcnow()
-            return ChapterReviewDTO(
-                status="draft",
-                memo="",
-                created_at=now,
-                updated_at=now
-            )
+        # 返回默认审阅
+        now = datetime.utcnow()
+        return ChapterReviewDTO(
+            status="draft",
+            memo="",
+            created_at=now,
+            updated_at=now
+        )
 
     def save_chapter_review(
         self,
@@ -203,28 +203,20 @@ class ChapterService:
         if chapter is None:
             raise EntityNotFoundError("Chapter", f"{novel_id}/chapter-{chapter_number}")
 
-        # 读取现有审阅或创建新的
-        review_path = f"novels/{novel_id}/chapters/chapter-{chapter_number}-review.json"
-        storage = self.chapter_repository.storage
-
-        now = datetime.utcnow()
-        if storage.exists(review_path):
-            data = storage.read_json(review_path)
-            review = ChapterReviewDTO.from_dict(data)
-            review.status = status
-            review.memo = memo
-            review.updated_at = now
-        else:
-            review = ChapterReviewDTO(
-                status=status,
-                memo=memo,
-                created_at=now,
-                updated_at=now
+        # 使用数据库 repository
+        if self.chapter_review_repository:
+            return self.chapter_review_repository.upsert(
+                novel_id, chapter_number, status=status, memo=memo
             )
 
-        # 保存审阅
-        storage.write_json(review_path, review.to_dict())
-        return review
+        # 降级：返回临时对象（不应该到达这里）
+        now = datetime.utcnow()
+        return ChapterReviewDTO(
+            status=status,
+            memo=memo,
+            created_at=now,
+            updated_at=now
+        )
 
     def get_chapter_structure(
         self,
