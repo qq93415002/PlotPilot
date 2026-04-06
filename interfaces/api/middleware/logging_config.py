@@ -127,6 +127,7 @@ def setup_logging(
 
     # Set third-party library log levels to reduce noise
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     logging.getLogger("fastapi").setLevel(logging.WARNING)
 
 

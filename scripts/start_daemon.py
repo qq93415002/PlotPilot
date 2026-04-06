@@ -1,14 +1,19 @@
-"""启动自动驾驶守护进程（v2，全依赖注入 + 护城河）"""
+"""启动自动驾驶守护进程（v2，全依赖注入 + 护城河）
+
+日志：默认与 API 共用 ``logs/aitext.log``（环境变量 LOG_FILE），便于在「主日志」里查看
+规划/写作/节拍；另可设 LOG_FILE 仅写文件。
+"""
 import sys
 import logging
 import time
+import os
 from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from application.paths import get_db_path, DATA_DIR
+from application.paths import AITEXT_ROOT, get_db_path, DATA_DIR
 from infrastructure.persistence.database.connection import get_database
 from infrastructure.persistence.database.sqlite_novel_repository import SqliteNovelRepository
 from infrastructure.persistence.database.sqlite_chapter_repository import SqliteChapterRepository
@@ -26,16 +31,14 @@ from interfaces.api.dependencies import (
     get_llm_service, get_context_builder, get_bible_service,
     get_foreshadowing_repository, get_novel_repository, get_chapter_repository,
 )
+from interfaces.api.middleware.logging_config import setup_logging
 
 (DATA_DIR / "logs").mkdir(parents=True, exist_ok=True)
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(name)s] %(levelname)s %(message)s",
-    handlers=[
-        logging.FileHandler(str(DATA_DIR / "logs" / "autopilot_daemon.log"), encoding="utf-8"),
-        logging.StreamHandler()
-    ]
-)
+_log_level = getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO)
+_default_log = str(AITEXT_ROOT / "logs" / "aitext.log")
+_log_file = os.getenv("LOG_FILE", _default_log)
+setup_logging(level=_log_level, log_file=_log_file)
+
 logger = logging.getLogger(__name__)
 
 
@@ -77,7 +80,7 @@ def build_daemon() -> AutopilotDaemon:
     triple_repo = None
     try:
         from infrastructure.persistence.database.triple_repository import TripleRepository
-        triple_repo = TripleRepository(db_path)
+        triple_repo = TripleRepository(db)
         logger.info("TripleRepository 已启用")
     except Exception as e:
         logger.warning(f"TripleRepository 不可用，图谱提取已禁用：{e}")
@@ -110,7 +113,7 @@ def build_daemon() -> AutopilotDaemon:
 
 if __name__ == "__main__":
     logger.info("=" * 80)
-    logger.info("🚀 Autopilot Daemon v2 Starting")
+    logger.info("🚀 Autopilot Daemon v2 Starting（日志写入 %s）", _log_file)
     logger.info("=" * 80)
 
     daemon = build_daemon()
