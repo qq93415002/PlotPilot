@@ -11,7 +11,7 @@ from application.blueprint.services.continuous_planning_service import Continuou
 from infrastructure.persistence.database.story_node_repository import StoryNodeRepository
 from infrastructure.persistence.database.chapter_element_repository import ChapterElementRepository
 from infrastructure.persistence.database.sqlite_chapter_repository import SqliteChapterRepository
-from infrastructure.persistence.database.connection import DatabaseConnection
+from infrastructure.persistence.database.connection import get_database
 from application.paths import DATA_DIR
 import os
 
@@ -51,7 +51,7 @@ def get_planning_service() -> ContinuousPlanningService:
         chapter_element_repo,
         llm_service,
         bible_service,
-        chapter_repository=SqliteChapterRepository(DatabaseConnection(db_path)),
+        chapter_repository=SqliteChapterRepository(get_database()),
     )
 
 
@@ -64,7 +64,7 @@ def get_service(
     """
     db_path = str(DATA_DIR / "aitext.db")
     repository = StoryNodeRepository(db_path)
-    chapter_repo = SqliteChapterRepository(DatabaseConnection(db_path))
+    chapter_repo = SqliteChapterRepository(get_database())
     return StoryStructureService(
         repository,
         chapter_repository=chapter_repo,

@@ -57,6 +57,8 @@ export function subscribeChapterStream(
     onChapterContent?: (data: { chapterNumber: number; content: string; wordCount: number; beatIndex: number }) => void
     onAutopilotStopped?: (status: string) => void
     onError?: (error: Error) => void
+    onConnected?: () => void
+    onDisconnected?: () => void
   }
 ): AbortController {
   const ctrl = new AbortController()
@@ -65,12 +67,20 @@ export function subscribeChapterStream(
     try {
       const res = await fetch(`/api/v1/autopilot/${novelId}/chapter-stream`, {
         signal: ctrl.signal,
+        headers: {
+          'Accept': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+        },
       })
 
       if (!res.ok || !res.body) {
         handlers.onError?.(new Error(`HTTP ${res.status}`))
+        handlers.onDisconnected?.()
         return
       }
+      
+      // 通知连接成功
+      handlers.onConnected?.()
 
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
@@ -116,6 +126,7 @@ export function subscribeChapterStream(
     } catch (e) {
       if (e instanceof Error && e.name === 'AbortError') return
       handlers.onError?.(e instanceof Error ? e : new Error('Stream error'))
+      handlers.onDisconnected?.()
     }
   })()
 

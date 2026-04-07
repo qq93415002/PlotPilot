@@ -627,8 +627,9 @@ const load = async () => {
       })),
     }
     await loadOutlineTitles()
-  } catch {
-    message.error('加载叙事知识失败')
+  } catch (e: any) {
+    console.error('加载叙事知识失败:', e)
+    message.error(e?.response?.data?.detail || '加载叙事知识失败')
   }
 }
 

@@ -187,6 +187,61 @@ def _apply_character_enhancements(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _apply_chapter_summaries_enhancements(conn: sqlite3.Connection) -> None:
+    """为 chapter_summaries 表补齐节拍和摘要扩展字段"""
+    cur = conn.execute("PRAGMA table_info(chapter_summaries)")
+    cols = {row[1] for row in cur.fetchall()}
+    migrations = {
+        "key_events": "ALTER TABLE chapter_summaries ADD COLUMN key_events TEXT",
+        "open_threads": "ALTER TABLE chapter_summaries ADD COLUMN open_threads TEXT",
+        "consistency_note": "ALTER TABLE chapter_summaries ADD COLUMN consistency_note TEXT",
+        "beat_sections": "ALTER TABLE chapter_summaries ADD COLUMN beat_sections TEXT",
+        "micro_beats": "ALTER TABLE chapter_summaries ADD COLUMN micro_beats TEXT",
+        "sync_status": "ALTER TABLE chapter_summaries ADD COLUMN sync_status TEXT DEFAULT 'draft'",
+    }
+    for col, sql in migrations.items():
+        if col not in cols:
+            try:
+                conn.execute(sql)
+                logger.info(f"Added chapter_summaries field: {col}")
+            except sqlite3.OperationalError as e:
+                logger.warning(f"chapter_summaries migration skip {col}: {e}")
+    conn.commit()
+
+
+
+def _apply_migration_files(conn: sqlite3.Connection) -> None:
+    """应用独立的迁移文件（幂等执行）"""
+    migrations_dir = Path(__file__).parent / "migrations"
+    
+    # 按执行顺序定义迁移文件
+    migration_files = [
+        "add_macro_diagnosis_results.sql",
+        "add_micro_beats_to_chapter_summaries.sql",
+    ]
+    
+    for migration_file in migration_files:
+        migration_path = migrations_dir / migration_file
+        if migration_path.exists():
+            try:
+                with open(migration_path, 'r', encoding='utf-8') as f:
+                    migration_sql = f.read()
+                
+                # 执行迁移SQL（使用executescript处理多个语句）
+                conn.executescript(migration_sql)
+                conn.commit()
+                logger.info(f"Applied migration: {migration_file}")
+            except sqlite3.OperationalError as e:
+                # 忽略已存在的表/列错误（幂等性）
+                if "already exists" in str(e) or "duplicate column" in str(e):
+                    logger.debug(f"Migration {migration_file} already applied: {e}")
+                else:
+                    logger.warning(f"Migration {migration_file} failed: {e}")
+            except Exception as e:
+                logger.warning(f"Failed to apply migration {migration_file}: {e}")
+        else:
+            logger.warning(f"Migration file not found: {migration_path}")
+
 
 def _ensure_triple_provenance_table(conn: sqlite3.Connection) -> None:
     """旧库补齐 triple_provenance 表（schema.sql 对新库已包含）。"""
@@ -270,7 +325,9 @@ class DatabaseConnection:
         _apply_autopilot_v2_migrations(conn)
         _apply_last_chapter_audit_columns(conn)
         _apply_character_enhancements(conn)
+        _apply_chapter_summaries_enhancements(conn)
         _ensure_triple_provenance_table(conn)
+        _apply_migration_files(conn)
         conn.close()
 
     def get_connection(self) -> sqlite3.Connection:

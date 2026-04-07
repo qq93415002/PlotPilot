@@ -206,28 +206,41 @@ class StreamingBus:
             logger.debug("[StreamingBus] get_chunk: 队列不可用")
             return None
         
-        try:
-            # 使用短超时避免阻塞
-            message = queue.get(timeout=timeout)
-            
-            # 检查消息是否属于当前小说
-            if isinstance(message, dict):
-                msg_novel_id = message.get("novel_id")
-                if msg_novel_id == novel_id:
-                    return message.get("chunk")
-                else:
-                    # 消息不属于当前小说，放回队列头部
-                    # 注意：Queue 不支持 unshift，只能记录并跳过
-                    # 对于多小说场景，这里会丢失其他小说的消息
-                    logger.debug(f"[StreamingBus] get_chunk: 跳过非目标小说消息 ({msg_novel_id} != {novel_id})")
-                    return None
-            
-            logger.debug(f"[StreamingBus] get_chunk: 无效消息格式")
-            return None
-            
-        except Exception as e:
-            # 队列为空（超时）是正常情况，不需要记录
-            return None
+        # 尝试多次读取，直到找到匹配的小说消息或超时
+        start_time = time.time()
+        max_wait_time = timeout
+        
+        while (time.time() - start_time) < max_wait_time:
+            try:
+                # 使用短超时避免长时间阻塞
+                remaining_time = max_wait_time - (time.time() - start_time)
+                if remaining_time <= 0:
+                    break
+                    
+                message = queue.get(timeout=min(remaining_time, 0.01))
+                
+                # 检查消息是否属于当前小说
+                if isinstance(message, dict):
+                    msg_novel_id = message.get("novel_id")
+                    if msg_novel_id == novel_id:
+                        return message.get("chunk")
+                    else:
+                        # 消息不属于当前小说，重新放回队列
+                        # 使用非阻塞方式放回，避免死锁
+                        try:
+                            queue.put_nowait(message)
+                        except:
+                            # 如果队列已满，至少不丢失当前消息
+                            logger.warning(f"[StreamingBus] 无法将消息重新放回队列，小说ID: {msg_novel_id}")
+                            
+                # 继续尝试获取下一条消息
+                
+            except Exception as e:
+                # 队列为空，继续等待
+                time.sleep(0.001)  # 短暂休眠避免忙等待
+                
+        # 超时未找到匹配消息
+        return None
     
     def get_chunk_non_blocking(self, novel_id: str) -> Optional[str]:
         """非阻塞获取增量文字
@@ -242,31 +255,66 @@ class StreamingBus:
         if queue is None:
             return None
         
-        try:
-            message = queue.get_nowait()
-            
-            if isinstance(message, dict) and message.get("novel_id") == novel_id:
-                return message.get("chunk")
-            
-            return None
-            
-        except:
-            return None
+        # 非阻塞模式下，最多检查20条消息
+        max_checks = 20
+        checks = 0
+        
+        while checks < max_checks:
+            try:
+                message = queue.get_nowait()
+                checks += 1
+                
+                if isinstance(message, dict) and message.get("novel_id") == novel_id:
+                    return message.get("chunk")
+                else:
+                    # 消息不属于当前小说，重新放回队列
+                    try:
+                        queue.put_nowait(message)
+                    except:
+                        # 队列已满，至少不阻塞当前操作
+                        logger.warning(f"[StreamingBus] get_chunk_non_blocking: 无法重新放回消息")
+                        
+            except:
+                # 队列为空
+                break
+                
+        return None
     
     def clear(self, novel_id: str):
-        """清空指定小说的队列（清空所有消息的简化实现）"""
+        """清空指定小说的队列中的消息"""
         queue = _get_queue()
         if queue is None:
             return
         
+        # 临时存储不属于该小说的消息
+        temp_messages = []
+        
         try:
-            # 清空队列中属于该小说的消息
+            # 遍历队列，移除目标小说的消息
             while True:
                 try:
-                    queue.get_nowait()
+                    message = queue.get_nowait()
+                    
+                    if isinstance(message, dict) and message.get("novel_id") == novel_id:
+                        # 属于目标小说，丢弃
+                        logger.debug(f"[StreamingBus] 清空队列: 移除小说 {novel_id} 的消息")
+                    else:
+                        # 不属于目标小说，暂存
+                        temp_messages.append(message)
+                        
                 except:
+                    # 队列为空，停止遍历
                     break
-            logger.debug(f"[StreamingBus] 清空队列: {novel_id}")
+                    
+            # 将其他小说的消息重新放回队列
+            for message in temp_messages:
+                try:
+                    queue.put_nowait(message)
+                except:
+                    logger.warning(f"[StreamingBus] clear: 无法将消息重新放回队列")
+                    
+            logger.debug(f"[StreamingBus] 清空队列完成: {novel_id}, 保留 {len(temp_messages)} 条其他小说消息")
+            
         except Exception as e:
             logger.debug(f"[StreamingBus] clear 异常: {e}")
 

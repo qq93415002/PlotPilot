@@ -441,6 +441,12 @@ function startChapterStream() {
       writingBeatIndex.value = data.beatIndex
       emit('chapter-content-update', data)
     },
+    onConnected: () => {
+      console.log('Chapter stream connected')
+    },
+    onDisconnected: () => {
+      console.log('Chapter stream disconnected')
+    },
     onError: (err) => {
       console.error('Chapter stream error:', err)
     }
