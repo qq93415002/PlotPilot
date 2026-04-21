@@ -257,6 +257,15 @@ class LLMControlService:
                 description='方舟 OpenAI-compatible 接口；模型名以方舟控制台 Endpoint 为准。',
                 tags=['domestic', 'preset'],
             ),
+            LLMPreset(
+                key='minimax',
+                label='MiniMax',
+                protocol='openai',
+                default_base_url='https://api.minimax.chat/v1',
+                default_model='',
+                description='MiniMax OpenAI-compatible 接口。模型名以 MiniMax 文档为准（如 MiniMax-M2.7）。',
+                tags=['domestic', 'preset'],
+            ),
         ]
 
     def get_preset_map(self) -> Dict[str, LLMPreset]:
@@ -533,6 +542,7 @@ class LLMControlService:
         openai_key = (os.getenv('OPENAI_API_KEY') or '').strip()
         gemini_key = (os.getenv('GEMINI_API_KEY') or '').strip()
         ark_key = (os.getenv('ARK_API_KEY') or '').strip()
+        minimax_key = (os.getenv('MINIMAX_API_KEY') or '').strip()
 
         if anthropic_key and (llm_provider == 'anthropic' or not llm_provider):
             profiles[1] = profiles[1].model_copy(update={
@@ -564,6 +574,15 @@ class LLMControlService:
                 'api_key': ark_key,
                 'base_url': (os.getenv('ARK_BASE_URL') or '').strip() or 'https://ark.cn-beijing.volces.com/api/v3',
                 'model': (os.getenv('ARK_MODEL') or '').strip(),
+            })
+            active_profile_id = profiles[0].id
+        elif minimax_key:
+            profiles[0] = profiles[0].model_copy(update={
+                'name': 'MiniMax',
+                'preset_key': 'minimax',
+                'api_key': minimax_key,
+                'base_url': (os.getenv('MINIMAX_BASE_URL') or '').strip() or 'https://api.minimax.chat/v1',
+                'model': (os.getenv('MINIMAX_MODEL') or '').strip(),
             })
             active_profile_id = profiles[0].id
 
