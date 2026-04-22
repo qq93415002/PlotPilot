@@ -19,11 +19,15 @@ class LLMSessionLoggingWrapper(LLMService):
         """记录 LLM 调用"""
         try:
             context = get_llm_context()
+            logger.warning(f"[LLM_LOG] Context: {context}")
             if not context or not context.novel_id:
+                logger.warning(f"[LLM_LOG] No context or novel_id, skipping logging")
                 return
 
             prompt_text = prompt.to_string() if hasattr(prompt, 'to_string') else str(prompt)
             model = config.model or None
+
+            logger.warning(f"[LLM_LOG] Logging: novel_id={context.novel_id}, prompt_node={context.prompt_node}")
 
             if result:
                 try:
@@ -42,10 +46,11 @@ class LLMSessionLoggingWrapper(LLMService):
                         prompt_node=context.prompt_node,
                         chapter_number=context.chapter_number
                     )
+                    logger.warning(f"[LLM_LOG] Successfully logged both messages")
                 except Exception as log_err:
-                    logger.warning(f"Failed to log LLM session: {log_err}")
+                    logger.warning(f"[LLM_LOG] Failed to log LLM session: {log_err}")
         except Exception as e:
-            logger.debug(f"LLM session logging skipped: {e}")
+            logger.warning(f"[LLM_LOG] Error in _log_call: {e}")
 
     async def generate(self, prompt: Prompt, config: GenerationConfig) -> GenerationResult:
         result = await self._delegate.generate(prompt, config)

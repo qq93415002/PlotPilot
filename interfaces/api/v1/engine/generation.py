@@ -30,6 +30,7 @@ from interfaces.api.dependencies import (
     get_auto_bible_generator,
     get_auto_knowledge_generator,
     get_setup_main_plot_suggestion_service,
+    set_llm_session_context,
 )
 # from application.services.story_structure_ai_service import StoryStructureAIService  # 已废弃，使用 ContinuousPlanningService
 from application.blueprint.services.continuous_planning_service import ContinuousPlanningService
@@ -240,6 +241,8 @@ async def generate_chapter_stream(
     logger.info(f"  章节号: {request.chapter_number}")
     logger.info(f"  大纲长度: {len(request.outline)} 字符")
 
+    set_llm_session_context(novel_id=novel_id, prompt_node="generate-chapter", chapter_number=request.chapter_number)
+
     async def event_gen():
         # 转换 scene_director_result 为 SceneDirectorAnalysis（如果提供）
         scene_director = None
@@ -282,6 +285,8 @@ async def hosted_write_stream(
     logger.info(f"API 请求: POST /{novel_id}/hosted-write-stream (SSE)")
     logger.info(f"  章节范围: {request.from_chapter}-{request.to_chapter}")
     logger.info(f"  auto_save: {request.auto_save}, auto_outline: {request.auto_outline}")
+
+    set_llm_session_context(novel_id=novel_id, prompt_node="hosted-write")
 
     if request.to_chapter < request.from_chapter:
         logger.error(f"API 错误: to_chapter < from_chapter")

@@ -197,6 +197,9 @@ class AutopilotDaemon:
     async def _process_novel(self, novel: Novel):
         """处理单个小说（全流程）"""
         try:
+            from domain.ai.context.llm_context import set_llm_context, clear_llm_context
+            set_llm_context(novel_id=novel.novel_id.value, prompt_node="autopilot-daemon")
+
             if not self._is_still_running(novel):
                 logger.info(f"[{novel.novel_id}] 用户已停止自动驾驶，跳过本轮")
                 return
@@ -263,6 +266,8 @@ class AutopilotDaemon:
             else:
                 logger.warning(f"⚠️  [{novel.novel_id}] 连续失败 {novel.consecutive_error_count}/3 次")
             self._save_novel_state(novel)
+        finally:
+            clear_llm_context()
 
     async def _handle_macro_planning(self, novel: Novel):
         """处理宏观规划（规划部/卷/幕）- 使用极速模式让 AI 自主推断结构"""

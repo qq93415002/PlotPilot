@@ -67,6 +67,8 @@ class LLMProviderFactory:
 
 class DynamicLLMService(LLMService):
     """动态读取当前激活配置，适配长生命周期服务/守护进程。"""
+    import logging
+    _logger = logging.getLogger(__name__)
 
     def __init__(self, factory: Optional[LLMProviderFactory] = None):
         self.factory = factory or LLMProviderFactory()
@@ -99,11 +101,13 @@ class DynamicLLMService(LLMService):
         )
 
     async def generate(self, prompt: Prompt, config: GenerationConfig) -> GenerationResult:
+        self._logger.warning(f"[DynamicLLM] generate called")
         provider = self._resolve_provider()
         effective_config = self._merge_config(config, provider)
         return await provider.generate(prompt, effective_config)
 
     async def stream_generate(self, prompt: Prompt, config: GenerationConfig) -> AsyncIterator[str]:
+        self._logger.warning(f"[DynamicLLM] stream_generate called")
         provider = self._resolve_provider()
         effective_config = self._merge_config(config, provider)
         async for chunk in provider.stream_generate(prompt, effective_config):

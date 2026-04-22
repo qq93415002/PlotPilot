@@ -173,6 +173,7 @@ async def generate_dialogue(
 
     根据角色锚点、Bible 关系和历史对白样本，生成更贴近角色的对话
     """
+    logger.warning(f"[SANDBOX] Setting context for novel_id={request.novel_id}")
     set_llm_session_context(novel_id=request.novel_id, prompt_node="sandbox-dialogue")
     try:
         bible = bible_service.get_bible_by_novel(request.novel_id)
