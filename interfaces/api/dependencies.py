@@ -353,8 +353,51 @@ def get_llm_service():
 
     返回长生命周期包装器：每次 generate/stream_generate 时重新读取当前激活配置，
     因此前台控制面板修改后无需重启 API / 守护进程即可生效。
+    同时自动记录所有 LLM 调用到会话日志。
     """
-    return DynamicLLMService(get_llm_provider_factory())
+    from infrastructure.ai.llm_session_logging_wrapper import LLMSessionLoggingWrapper
+    return LLMSessionLoggingWrapper(DynamicLLMService(get_llm_provider_factory()))
+
+
+def set_llm_session_context(novel_id: str, prompt_node: str = None, chapter_number: int = None):
+    """设置当前请求的 LLM 会话上下文，用于自动记录
+
+    Args:
+        novel_id: 小说 ID
+        prompt_node: 提示词节点标识
+        chapter_number: 章节号
+    """
+    from domain.ai.context.llm_context import set_llm_context
+    set_llm_context(novel_id=novel_id, prompt_node=prompt_node, chapter_number=chapter_number)
+
+
+def clear_llm_session_context():
+    """清除当前请求的 LLM 会话上下文"""
+    from domain.ai.context.llm_context import clear_llm_context
+    clear_llm_context()
+
+
+class LLMSessionContextSetter:
+    """FastAPI 依赖类：自动设置 LLM 会话上下文
+
+    用法:
+        @router.post("/{novel_id}/some-endpoint")
+        async def some_endpoint(
+            novel_id: str,
+            ctx: LLMSessionContextSetter = Depends()
+        ):
+            # LLM 调用会被自动记录
+            ...
+    """
+
+    def __init__(
+        self,
+        novel_id: str,
+        prompt_node: str = None,
+        chapter_number: int = None
+    ):
+        from domain.ai.context.llm_context import set_llm_context
+        set_llm_context(novel_id=novel_id, prompt_node=prompt_node, chapter_number=chapter_number)
 
 
 def get_setup_main_plot_suggestion_service():

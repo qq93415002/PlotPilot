@@ -41,6 +41,9 @@
       <n-tab-pane name="foreshadow" tab="伏笔账本" display-directive="if">
         <ForeshadowLedgerPanel :slug="slug" />
       </n-tab-pane>
+      <n-tab-pane name="model-session" tab="模型会话" display-directive="if">
+        <ModelSessionPanel :slug="slug" />
+      </n-tab-pane>
     </n-tabs>
   </div>
 </template>
@@ -54,12 +57,13 @@ import StorylinePlotOverviewPanel from './StorylinePlotOverviewPanel.vue'
 import HolographicChroniclesPanel from './HolographicChroniclesPanel.vue'
 import ForeshadowLedgerPanel from './ForeshadowLedgerPanel.vue'
 import SandboxDialoguePanel from './SandboxDialoguePanel.vue'
+import ModelSessionPanel from './ModelSessionPanel.vue'
 
 /** 所有合法 tab 名 */
 const ALL_TABS = new Set([
   'bible', 'worldbuilding', 'knowledge',
   'storyline-arc', 'chronicles',
-  'sandbox', 'foreshadow',
+  'sandbox', 'foreshadow', 'model-session',
 ])
 
 /** 旧版 tab 名映射到新 tab 名 */
