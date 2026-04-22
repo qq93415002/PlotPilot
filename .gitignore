@@ -116,6 +116,8 @@ base_library.zip
 /tools/node22.zip
 /tools/nodejs_v22.zip
 /tools/nodejs_v22/
+/tools/python_full/
+/tools/python-3.11.9-amd64.exe
 # tools/python-*.zip       # ← 保留！Python embed 原始包（~15MB），入库供用户直接用
 
 # ── 临时 / 无关文件 ──
