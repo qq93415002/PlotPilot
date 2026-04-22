@@ -1,12 +1,12 @@
 @echo off
 chcp 65001 >nul 2>&1
-cd /d "d:\WORKSPACE\PlotPilot\frontend"
+cd /d "%~dp0frontend"
 
 echo ============================================================
 echo  PlotPilot Frontend Launcher
 echo ============================================================
 
-set "NODE_DIR=d:\WORKSPACE\PlotPilot\tools\nodejs22\node-v22.14.0-win-x64"
+set "NODE_DIR=%~dp0tools\nodejs22\node-v22.14.0-win-x64"
 set "PATH=%NODE_DIR%;%PATH%"
 
 if not exist "%NODE_DIR%\node.exe" (

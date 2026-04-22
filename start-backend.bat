@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul 2>&1
-cd /d "d:\WORKSPACE\PlotPilot"
+cd /d "%~dp0"
 
 echo ============================================================
 echo  PlotPilot Backend Launcher
@@ -14,8 +14,8 @@ if not exist "%PYTHON_EXE%" (
     exit /b 1
 )
 
-echo Starting backend on port 8006...
-set "PYTHONPATH=d:\WORKSPACE\PlotPilot;%%PYTHONPATH%%"
-"%PYTHON_EXE%" -m uvicorn interfaces.main:app --host 0.0.0.0 --port 8006
+echo Starting backend on port 8005...
+set "PYTHONPATH=%CD%;%%PYTHONPATH%%"
+"%PYTHON_EXE%" -m uvicorn interfaces.main:app --host 0.0.0.0 --port 8005
 
 pause
