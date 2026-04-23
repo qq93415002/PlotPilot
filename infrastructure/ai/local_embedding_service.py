@@ -53,12 +53,18 @@ class LocalEmbeddingService(EmbeddingService):
         # ════════════════════════════════════════════
         # 懒加载：仅在实例化时才导入重依赖
         # ════════════════════════════════════════════
-        # pythonw.exe 环境下 sys.stdin 为 None，
+        # pythonw.exe 环境下 sys.stdin/sys.stdout/sys.stderr 为 None，
         # sentence_transformers / torch 内部会调用 stdin.isatty() 导致崩溃
-        # 先给 stdin 一个有效的替代，防止崩溃
+        # 先给这些流一个有效的替代，防止崩溃
         import sys as _sys
+        import io
+        _null_io = io.TextIOWrapper(io.BytesIO(), encoding='utf-8', errors='replace')
         if _sys.stdin is None:
-            _sys.stdin = open(_sys.executable if hasattr(_sys, 'executable') else 'nul', 'r')
+            _sys.stdin = _null_io
+        if _sys.stdout is None:
+            _sys.stdout = _null_io
+        if _sys.stderr is None:
+            _sys.stderr = io.TextIOWrapper(io.BytesIO(), encoding='utf-8', errors='replace')
 
         try:
             import torch
