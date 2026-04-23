@@ -261,7 +261,7 @@ class LLMControlService:
                 key='minimax',
                 label='MiniMax',
                 protocol='openai',
-                default_base_url='https://api.minimax.chat/v1',
+                default_base_url='https://api.minimaxi.com/v1',
                 default_model='',
                 description='MiniMax OpenAI-compatible 接口。模型名以 MiniMax 文档为准（如 MiniMax-M2.7）。',
                 tags=['domestic', 'preset'],
@@ -581,7 +581,7 @@ class LLMControlService:
                 'name': 'MiniMax',
                 'preset_key': 'minimax',
                 'api_key': minimax_key,
-                'base_url': (os.getenv('MINIMAX_BASE_URL') or '').strip() or 'https://api.minimax.chat/v1',
+                'base_url': (os.getenv('MINIMAX_BASE_URL') or '').strip() or 'https://api.minimaxi.com/v1',
                 'model': (os.getenv('MINIMAX_MODEL') or '').strip(),
             })
             active_profile_id = profiles[0].id
