@@ -540,7 +540,7 @@ def get_embedding_service():
             logger.info("使用本地嵌入服务 (DB配置): path=%s, gpu=%s", _model_path, _use_gpu)
             return LocalEmbeddingService(model_name=_model_path, use_gpu=_use_gpu)
     except Exception as e:
-        logger.warning("EmbeddingService 初始化失败: %s", e)
+        logger.exception("EmbeddingService 初始化失败: %s", e)
         return None
 
 
