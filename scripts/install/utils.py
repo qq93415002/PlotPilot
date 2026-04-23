@@ -83,7 +83,7 @@ def port_in_use(port):
         return s.connect_ex(("127.0.0.1", port)) == 0
 
 
-def find_free_port(start=8005, max_try=20):
+def find_free_port(start=8105, max_try=20):
     """从 start 开始找可用端口"""
     for p in range(start, start + max_try):
         if not port_in_use(p):
@@ -143,7 +143,7 @@ def kill_port(port, timeout=5):
     return False
 
 
-DEFAULT_PORT = 8005
+DEFAULT_PORT = 8105
 
 
 # ══════════════════════════════════════════════

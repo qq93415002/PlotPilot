@@ -122,8 +122,8 @@ export async function initApiClient(): Promise<void> {
     axiosInstance.defaults.baseURL = `http://127.0.0.1:${port}/api/v1`
     console.log(`[API] 桌面模式 baseURL: ${axiosInstance.defaults.baseURL}`)
   } else if (isTauri()) {
-    axiosInstance.defaults.baseURL = 'http://127.0.0.1:8005/api/v1'
-    console.warn('[API] Tauri 下未能通过 IPC 取得端口，回退 8005')
+    axiosInstance.defaults.baseURL = 'http://127.0.0.1:8105/api/v1'
+    console.warn('[API] Tauri 下未能通过 IPC 取得端口，回退 8105')
   }
 
   syncLegacyRootsFromV1()

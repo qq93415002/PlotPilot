@@ -14,8 +14,8 @@ if not exist "%PYTHON_EXE%" (
     exit /b 1
 )
 
-echo Starting backend on port 8005...
+echo Starting backend on port 8105...
 set "PYTHONPATH=%CD%;%%PYTHONPATH%%"
-"%PYTHON_EXE%" -m uvicorn interfaces.main:app --host 0.0.0.0 --port 8005
+"%PYTHON_EXE%" -m uvicorn interfaces.main:app --host 0.0.0.0 --port 8105
 
 pause

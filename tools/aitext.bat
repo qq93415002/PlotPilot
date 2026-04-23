@@ -134,7 +134,7 @@ if not exist "data\logs"     mkdir data\logs
 :: ════════════════════════════════════
 :: Step 3.5: 清理残留进程（防止端口占用）
 :: ════════════════════════════════════
-for /f "tokens=5" %%a in ('netstat -ano 2^>nul ^| findstr ":8005 .*LISTENING"') do (
+for /f "tokens=5" %%a in ('netstat -ano 2^>nul ^| findstr ":8105 .*LISTENING"') do (
     taskkill /PID %%a /F >nul 2>&1
 )
 for /f "tokens=5" %%a in ('netstat -ano 2^>nul ^| findstr ":8006 .*LISTENING"') do (

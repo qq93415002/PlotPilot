@@ -14,7 +14,7 @@ def main(args=None):
     # serve 命令
     serve_parser = subparsers.add_parser('serve', help='启动 API 服务器')
     serve_parser.add_argument('--host', default='127.0.0.1', help='监听地址')
-    serve_parser.add_argument('--port', type=int, default=8005, help='监听端口')
+    serve_parser.add_argument('--port', type=int, default=8105, help='监听端口')
     serve_parser.add_argument('--reload', action='store_true', help='开启热重载')
 
     parsed_args = parser.parse_args(args)

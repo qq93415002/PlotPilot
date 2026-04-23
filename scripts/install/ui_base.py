@@ -449,7 +449,7 @@ class LogPanel:
 class StatusCard:
     """状态卡片：图标 + 标签 + 进度条 + 百分比"""
 
-    def __init__(self, parent, port=8005):
+    def __init__(self, parent, port=8105):
         card = tk.Frame(parent, bg=BG2)
         card.pack(fill="x", padx=CARD_PADX, pady=10)
 

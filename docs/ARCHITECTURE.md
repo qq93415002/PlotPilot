@@ -95,11 +95,11 @@ aitext/
 ## 入口点
 
 ```bash
-# 启动后端服务（默认端口 8005）
+# 启动后端服务（默认端口 8105）
 python -m aitext serve
 
 # 指定端口
-python -m aitext serve --port 8005 --reload
+python -m aitext serve --port 8105 --reload
 
 # 一键启动（后端 + 前端）
 python run_server.py
@@ -113,7 +113,7 @@ python scripts/setup/start_daemon.py
 - **目录**：`frontend/`
 - **技术栈**：Vue 3 + Vite + Naive UI + ECharts
 - **默认端口**：3000
-- **API 代理**：`/api` → `http://localhost:8005`
+- **API 代理**：`/api` → `http://localhost:8105`
 
 ```bash
 cd frontend

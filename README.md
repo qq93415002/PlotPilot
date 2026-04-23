@@ -64,13 +64,13 @@
 python -m venv .venv && .venv\Scripts\activate
 pip install -r requirements.txt
 copy .env.example .env    # 填写 LLM 凭证
-uvicorn interfaces.main:app --host 127.0.0.1 --port 8005 --reload
+uvicorn interfaces.main:app --host 127.0.0.1 --port 8105 --reload
 
 # 前端（另开终端）
 cd frontend && npm install && npm run dev
 ```
 
-后端 API：`http://127.0.0.1:8005` · 文档：`http://127.0.0.1:8005/docs` · 前端：`http://localhost:3000`
+后端 API：`http://127.0.0.1:8105` · 文档：`http://127.0.0.1:8105/docs` · 前端：`http://localhost:3000`
 
 生产构建后前端可由 FastAPI 静态托管（`frontend/dist`），也可独立部署。
 

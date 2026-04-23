@@ -22,11 +22,11 @@ if [[ ! -d "${ROOT_DIR}/frontend/node_modules" ]]; then
   exit 1
 fi
 
-echo "[2/4] starting backend on http://127.0.0.1:8005"
+echo "[2/4] starting backend on http://127.0.0.1:8105"
 (
   cd "${ROOT_DIR}"
   source ".venv/bin/activate"
-  python -m uvicorn interfaces.main:app --host 127.0.0.1 --port 8005 --reload
+  python -m uvicorn interfaces.main:app --host 127.0.0.1 --port 8105 --reload
 ) &
 BACKEND_PID=$!
 
