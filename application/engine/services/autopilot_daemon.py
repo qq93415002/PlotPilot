@@ -67,6 +67,7 @@ class AutopilotDaemon:
         aftermath_pipeline: Optional[ChapterAftermathPipeline] = None,
         volume_summary_service=None,
         foreshadowing_repository=None,
+        knowledge_service=None,
     ):
         self.novel_repository = novel_repository
         self.llm_service = llm_service
@@ -82,6 +83,7 @@ class AutopilotDaemon:
         self.aftermath_pipeline = aftermath_pipeline
         self.volume_summary_service = volume_summary_service
         self.foreshadowing_repository = foreshadowing_repository
+        self.knowledge_service = knowledge_service
         
         # 惰性初始化 VolumeSummaryService
         if not self.volume_summary_service and llm_service and story_node_repo:
@@ -308,7 +310,10 @@ class AutopilotDaemon:
 
     def _fallback_act_chapters_plan(self, act_node, count: int) -> List[Dict[str, Any]]:
         """LLM 幕级规划失败或 chapters 为空时，生成可落库的占位章节（避免抛错导致连续失败计数）。"""
-        n = max(int(count or 5), 1)
+        # 使用结构计算引擎的保守默认值替代硬编码的 5
+        from application.blueprint.services.continuous_planning_service import calculate_structure_params
+        _default_cpa = calculate_structure_params(100)["chapters_per_act"]
+        n = max(int(count or _default_cpa), 1)
         act_num = getattr(act_node, "number", None) or 1
         act_label = (getattr(act_node, "title", None) or f"第{act_num}幕").strip()
         rows: List[Dict[str, Any]] = []
@@ -338,22 +343,36 @@ class AutopilotDaemon:
 
         target_act = next((n for n in act_nodes if n.number == target_act_number), None)
 
-        # 动态幕生成：超长篇可能只规划了部/卷框架，幕节点需要动态创建
+        # 动态幕生成：超长篇可能只规划了部/卷框架，幕节点需要动态生成
         if not target_act:
             # 先尝试找到父卷节点
             volume_nodes = sorted(
                 [n for n in all_nodes if n.node_type.value == "volume"],
                 key=lambda n: n.number
             )
-            
-            # 计算应该在第几卷
-            chapters_per_volume = max((novel.target_chapters or 100) // max(len(volume_nodes), 1), 50)
-            estimated_volume_number = max(1, (novel.current_auto_chapters or 0) // chapters_per_volume + 1)
-            
-            parent_volume = next((v for v in volume_nodes if v.number == estimated_volume_number), None)
-            
+
+            # 使用结构计算引擎获取推荐参数（替代硬编码的 // 3）
+            from application.blueprint.services.continuous_planning_service import calculate_structure_params
+            target_chapters = novel.target_chapters or 100
+            struct_params = calculate_structure_params(target_chapters)
+            rec_chapters_per_act = struct_params["chapters_per_act"]
+            rec_acts_per_volume = struct_params["acts_per_volume"]
+
+            # 智能父卷选择：优先让当前卷填满（达到 rec_acts_per_volume 幕），再跳下一卷
+            parent_volume = self._find_parent_volume_for_new_act(
+                volume_nodes=volume_nodes,
+                act_nodes=act_nodes,
+                current_auto_chapters=novel.current_auto_chapters or 0,
+                target_chapters=target_chapters,
+                rec_acts_per_volume=rec_acts_per_volume,
+                novel_id=novel.novel_id,
+            )
+
             if parent_volume:
-                logger.info(f"[{novel.novel_id}] 🎯 动态生成第 {target_act_number} 幕（父卷：第 {parent_volume.number} 卷）")
+                logger.info(
+                    f"[{novel.novel_id}] 🎯 动态生成第 {target_act_number} 幕"
+                    f"（父卷：第 {parent_volume.number} 卷，每幕建议 {rec_chapters_per_act} 章）"
+                )
                 try:
                     # 使用最后一个幕作为参考（如果有）
                     last_act = act_nodes[-1] if act_nodes else None
@@ -377,7 +396,7 @@ class AutopilotDaemon:
                             order_index=0,
                             planning_status=PlanningStatus.CONFIRMED,
                             planning_source=PlanningSource.AI_MACRO,
-                            suggested_chapter_count=chapters_per_volume // 3,
+                            suggested_chapter_count=rec_chapters_per_act,
                         )
                         await self.story_node_repo.save(first_act)
                     
@@ -402,7 +421,13 @@ class AutopilotDaemon:
 
         just_created_chapter_plan = False
         if not confirmed_chapters:
-            chapter_budget = target_act.suggested_chapter_count or 5
+            # 使用结构计算引擎的推荐值作为 fallback（替代硬编码的 5）
+            chapter_budget = target_act.suggested_chapter_count or rec_chapters_per_act
+            if not target_act.suggested_chapter_count:
+                logger.info(
+                    f"[{novel.novel_id}] 幕 {target_act_number} 无 suggested_chapter_count，"
+                    f"使用引擎推荐值 {rec_chapters_per_act}"
+                )
             plan_result: Dict[str, Any] = {}
             try:
                 plan_result = await self.planning_service.plan_act_chapters(
@@ -505,6 +530,22 @@ class AutopilotDaemon:
 
         chapter_num = next_chapter_node.number
         outline = next_chapter_node.outline or next_chapter_node.description or next_chapter_node.title
+
+        # 合并分章叙事节拍（beat_sections）到 outline，让 AI 按用户设定的叙事节拍生成
+        if self.knowledge_service:
+            try:
+                knowledge = self.knowledge_service.get_knowledge(novel.novel_id.value)
+                chapter_entry = next(
+                    (ch for ch in knowledge.chapters if str(ch.chapter_id) == str(chapter_num)),
+                    None
+                )
+                if chapter_entry and getattr(chapter_entry, "beat_sections", None):
+                    beats_text = "\n".join(str(b) for b in chapter_entry.beat_sections if b)
+                    if beats_text.strip():
+                        outline = f"【分章叙事节拍】\n{beats_text}\n\n【章节大纲】\n{outline}"
+                        logger.info(f"[{novel.novel_id}] 已合并第{chapter_num}章分章叙事节拍（{len(chapter_entry.beat_sections)}条）")
+            except Exception as _e:
+                logger.warning(f"[{novel.novel_id}] 读取分章叙事失败，使用原始大纲：{_e}")
 
         if needs_buffer:
             outline = f"【缓冲章：日常过渡】{outline}。主角战后休整，与配角闲聊，展示收获，节奏轻松。"
@@ -1318,6 +1359,53 @@ class AutopilotDaemon:
                 status=ChapterStatus(status)
             )
             self.chapter_repository.save(chapter)
+
+    def _find_parent_volume_for_new_act(
+        self,
+        volume_nodes: list,
+        act_nodes: list,
+        current_auto_chapters: int,
+        target_chapters: int,
+        rec_acts_per_volume: int,
+        novel_id: str,
+    ):
+        """智能选择新幕的父卷。
+
+        核心改进（替代原来的线性均分算法）：
+        1. 统计每个已有卷下已挂载了多少幕
+        2. 优先选择「当前写入卷」（幕数尚未达到 rec_acts_per_volume 的卷）
+        3. 只有当前卷的幕数已经满了，才跳到下一卷
+        4. 这样确保每卷都能写够足够多的幕，而不是写3幕就跑路
+        """
+        if not volume_nodes:
+            logger.warning(f"[{novel_id}] 无可用卷节点，无法确定父卷")
+            return None
+
+        # 统计每个卷下的幕数量
+        volume_act_counts: Dict[int, int] = {}
+        for v in volume_nodes:
+            volume_act_counts[v.number] = sum(
+                1 for a in act_nodes if a.parent_id == v.id
+            )
+
+        # 策略：从第一个卷开始找，返回第一个「幕数 < rec_acts_per_volume」的卷
+        # 如果所有卷都满了，返回最后一个卷（允许超发）
+        for v in volume_nodes:
+            current_count = volume_act_counts.get(v.number, 0)
+            if current_count < rec_acts_per_volume:
+                logger.info(
+                    f"[{novel_id}] 父卷选择：第{v}卷已有{current_count}幕"
+                    f"（上限{rec_acts_per_volume}），继续在本卷创建新幕"
+                )
+                return v
+
+        # 所有卷都已达到建议幕数，挂在最后一个卷上（允许超发）
+        last_volume = volume_nodes[-1]
+        logger.info(
+            f"[{novel_id}] 父卷选择：所有卷已达{rec_acts_per_volume}幕上限"
+            f"，新幕挂到最后一个卷（第{last_volume.number}卷）"
+        )
+        return last_volume
 
     async def _find_next_unwritten_chapter_async(self, novel):
         """找到下一个未写的章节节点"""

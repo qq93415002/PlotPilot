@@ -73,6 +73,9 @@ from interfaces.api.v1.audit import chapter_review_routes, macro_refactor, chapt
 # Analyst module
 from interfaces.api.v1.analyst import voice, narrative_state, foreshadow_ledger
 
+# System module (internal tooling)
+from interfaces.api.v1 import system as system_routes
+
 # Workbench module
 from interfaces.api.v1.workbench import sandbox, writer_block, monitor, llm_control, llm_session_routes
 from interfaces.api.stats.routers.stats import create_stats_router
@@ -81,9 +84,9 @@ from interfaces.api.stats.repositories.sqlite_stats_repository_adapter import Sq
 from infrastructure.persistence.database.connection import get_database
 
 # 产品发布版本（与前端 / 安装包一致）
-APP_RELEASE_VERSION = "1.0.1"
-# 构建标识（每次进程启动唯一）
-BACKEND_BUILD_ID = datetime.now().strftime("%Y%m%d-%H%M%S")
+APP_RELEASE_VERSION = "1.0.2"
+# 构建标识（与安装包/发布说明一致，便于对账）
+BACKEND_BUILD_ID = "build-20260209-1200-c4d2"
 STARTUP_TIME = time.time()
 
 logger.info("=" * 80)
@@ -102,7 +105,7 @@ logger.info("=" * 80)
 # 创建 FastAPI 应用
 app = FastAPI(
     title="PlotPilot API",
-    version="1.0.1",
+    version="1.0.2",
     description="PlotPilot（墨枢）AI 小说创作平台 API",
     redirect_slashes=True,  # 自动将 /api/v1/novels 重定向到 /api/v1/novels/
 )
@@ -461,6 +464,9 @@ app.include_router(chapter_element_routes.router)
 app.include_router(voice.router, prefix="/api/v1")
 app.include_router(narrative_state.router, prefix="/api/v1")
 app.include_router(foreshadow_ledger.router, prefix="/api/v1")
+
+# System module routes (internal tooling)
+app.include_router(system_routes.router, prefix="/api/v1")
 
 # Workbench module routes
 app.include_router(writer_block.router, prefix="/api/v1")
